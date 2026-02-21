@@ -2,7 +2,7 @@
 
 ![Dashboard](docs/screenshot.png)
 
-AI-powered news digest tool that generates structured summaries from Twitter/RSS feeds. Works as a standalone service or as an [OpenClaw](https://github.com/openclaw) skill.
+AI-powered news digest tool that generates structured summaries from Twitter/RSS feeds. Works as a standalone service or as an [OpenClaw](https://github.com/openclaw/openclaw) / [Zylos](https://github.com/AiExMachina/Zylos) skill.
 
 ## Features
 
@@ -16,19 +16,41 @@ AI-powered news digest tool that generates structured summaries from Twitter/RSS
 
 ## Installation
 
-### Option 1: Git Clone
+### Option 1: OpenClaw Skill
+
+Drop the `ai-digest` folder into your OpenClaw skills directory, or symlink it:
 
 ```bash
-git clone https://github.com/kevinhe/ai-digest.git
+# Clone into your skills folder
+cd ~/.openclaw/skills/
+git clone https://github.com/kevinho/ai-digest.git
+
+# Or symlink from wherever you cloned it
+ln -s /path/to/ai-digest ~/.openclaw/skills/ai-digest
+```
+
+OpenClaw will auto-detect `SKILL.md` and load the skill. The agent can then:
+- Generate digests via cron jobs
+- Serve the dashboard via reverse proxy
+- Handle `mk <url>` / `mark <url>` commands for bookmarking
+
+### Option 2: Zylos Skill
+
+```bash
+# Clone into Zylos skills directory
+cd ~/.zylos/skills/
+git clone https://github.com/kevinho/ai-digest.git
+```
+
+Zylos reads `SKILL.md` for tool definitions. The digest API server runs as a sidecar service.
+
+### Option 3: Standalone (no agent framework)
+
+```bash
+git clone https://github.com/kevinho/ai-digest.git
 cd ai-digest
 npm install
 ```
-
-### Option 2: Deploy as Standalone Service
-
-1. Clone the repository
-2. Set up environment variables (see below)
-3. Run with PM2 or systemd for production
 
 ## Quick Start
 
@@ -124,12 +146,6 @@ npm run dev  # Start with --watch for auto-reload
 3. Commit your changes (`git commit -m 'Add some amazing feature'`)
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
-
-Please make sure to:
-- Follow the existing code style
-- Add tests for new features
-- Update documentation as needed
-- Test your changes thoroughly
 
 ## License
 
