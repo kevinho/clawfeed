@@ -1153,6 +1153,8 @@ function showCreatePackModal() {
       <label style="font-size:12px;color:#888;">${t('packDesc')}</label>
       <textarea id="pack_desc" style="width:100%;padding:8px 12px;background:#0f0f0f;border:1px solid #333;border-radius:6px;color:#e0e0e0;font-size:13px;margin-top:4px;min-height:60px;resize:vertical;font-family:inherit;" placeholder="A curated set of AI news sources..."></textarea>
     </div>
+    <div id="pack_preview" style="margin-bottom:12px;padding:10px;background:#0a0a0a;border:1px solid #222;border-radius:6px;font-size:12px;color:#666;">⏳</div>
+    <div style="font-size:11px;color:#555;margin-bottom:12px;line-height:1.5;">${lang==='zh' ? '💡 将你所有活跃的信息源打包生成一个公开链接，其他人可以一键安装到自己的 dashboard' : '💡 Packages all your active sources into a shareable link. Others can install them to their dashboard in one click.'}</div>
     <div style="display:flex;gap:8px;justify-content:flex-end;">
       <button onclick="this.closest('div[style*=fixed]').remove()" style="padding:8px 20px;background:#2a2a2a;border:1px solid #444;border-radius:6px;color:#aaa;cursor:pointer;font-size:13px;">${t('cancel')}</button>
       <button onclick="doCreatePack(this)" style="padding:8px 20px;background:#1a3a1a;border:1px solid #40c040;border-radius:6px;color:#40c040;cursor:pointer;font-size:13px;">${t('createPack')}</button>
@@ -1169,6 +1171,8 @@ function showCreatePackModal() {
     const nameEl = document.getElementById('pack_name');
     const descEl = document.getElementById('pack_desc');
     if (nameEl && !nameEl._edited) nameEl.value = `${currentUser?.name || 'My'}'s ${labels.slice(0,2).join(' + ')} Pack`;
+    const prev = document.getElementById('pack_preview');
+    if (prev) prev.innerHTML = `<div style="color:#888;margin-bottom:6px;">${lang==='zh'?'将打包以下':'Will include'} <b style="color:#40c040;">${active.length}</b> ${lang==='zh'?'个源：':'sources:'}</div>` + active.map(s => `<div style="padding:2px 0;">${SOURCE_ICONS[s.type]||'📦'} ${s.name} <span style="color:#444;">· ${s.type}</span></div>`).join('');
     if (descEl && !descEl._edited) descEl.value = `${active.length} curated sources: ${active.map(s => s.name).join(', ')}`;
   }).catch(() => {});
   document.getElementById('pack_name').oninput = function() { this._edited = true; };
