@@ -396,7 +396,7 @@ function renderAuthBar() {
     </div>
   </div>`;
   if (currentUser) {
-    bar.innerHTML = ghLangHtml() + sourcesBtn + moreMenu
+    bar.innerHTML = ghLangHtml() + sourcesBtn
       + `<div class="user-menu" onclick="document.getElementById('userDropdown').classList.toggle('show')">
         <img src="${currentUser.avatar}" alt="">
         <span class="user-name">${currentUser.name}</span>
@@ -404,10 +404,11 @@ function renderAuthBar() {
           <a href="#" onclick="event.stopPropagation();showFeedInfo();return false;">📡 My Feed</a>
           <a href="#" onclick="event.stopPropagation();doLogout();return false;">${t('logout')}</a>
         </div>
-      </div>`;
+      </div>` + moreMenu;
   } else {
-    bar.innerHTML = ghLangHtml() + sourcesBtn + moreMenu
-      + (authEnabled ? `<a class="auth-btn" href="${API}/auth/google?origin=${encodeURIComponent(location.origin)}">${t('signIn')}</a>` : '');
+    bar.innerHTML = ghLangHtml() + sourcesBtn
+      + (authEnabled ? `<a class="auth-btn" href="${API}/auth/google?origin=${encodeURIComponent(location.origin)}">${t('signIn')}</a>` : '')
+      + moreMenu;
   }
   const lt = document.getElementById('langToggle');
   if (lt) lt.onclick = (e) => { e.preventDefault(); e.stopPropagation(); setLang(lang === 'zh' ? 'en' : 'zh'); };
