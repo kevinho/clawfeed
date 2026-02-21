@@ -1064,11 +1064,15 @@ async function renderPacksSection() {
   try {
     const r = await fetch(`${API}/packs`, { credentials: 'same-origin' });
     const packs = await r.json();
-    let html = `<div style="display:flex;gap:8px;margin-bottom:16px;">
+    let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+      <div>
+        <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📦 ${lang==='zh'?'Source Packs 市场':'Source Packs Market'}</h2>
+        <div style="font-size:12px;color:#555;margin-top:4px;">${lang==='zh'?'发现和安装他人分享的信息源合集':'Discover and install curated source packs from others'}</div>
+      </div>
       <button onclick="renderSources()" class="back-btn">${t('back')}</button>
     </div>`;
     if (!packs.length) {
-      html += `<div class="empty">${t('noPacks')}</div>`;
+      html += `<div class="empty">${lang==='zh'?'还没有公开的 Pack，成为第一个分享者！':'No public packs yet. Be the first to share!'}</div>`;
     } else {
       html += '<div class="digest-list">';
       for (const p of packs) {
@@ -1092,8 +1096,13 @@ async function renderPacksSection() {
               </div>
             </div>
             <div class="pack-actions">
-              ${currentUser ? `<button class="pack-install-btn" onclick="installPack('${p.slug}', this)">${t('installPack')}</button>` : `<button class="pack-install-btn" onclick="showToast(t('loginToInstall'))" style="opacity:.5">${t('loginToInstall')}</button>`}
-              ${currentUser && p.created_by === currentUser.id ? `<button class="pack-delete-btn" onclick="delPack(${p.id})">${t('deletePack')}</button>` : ''}
+              ${currentUser && p.created_by === currentUser.id
+                ? `<button class="pack-install-btn" style="background:#1a1a2e;border-color:#6cf;color:#6cf;" onclick="navigator.clipboard.writeText(location.origin+'/pack/${p.slug}');showToast('${lang==='zh'?'链接已复制':'Link copied'}')">${lang==='zh'?'复制链接':'Copy Link'}</button>
+                   <button class="pack-delete-btn" onclick="delPack(${p.id})">${t('deletePack')}</button>`
+                : currentUser
+                  ? `<button class="pack-install-btn" onclick="installPack('${p.slug}', this)">${t('installPack')}</button>`
+                  : `<button class="pack-install-btn" onclick="showToast(t('loginToInstall'))" style="opacity:.5">${t('loginToInstall')}</button>`
+              }
             </div>
           </div>
         </div>`;
