@@ -5,7 +5,7 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed } from './db.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -477,6 +477,38 @@ const server = createServer(async (req, res) => {
       return json(res, { tweets: marks.filter(m => m.status === 'pending').map(m => ({ url: m.url, markedAt: m.created_at })), history });
     }
 
+    // ── Subscriptions endpoints ──
+
+    if (req.method === 'GET' && path === '/api/subscriptions') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      return json(res, listSubscriptions(db, req.user.id));
+    }
+
+    if (req.method === 'POST' && path === '/api/subscriptions') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const body = await parseBody(req);
+      if (!body.sourceId) return json(res, { error: 'sourceId required' }, 400);
+      const source = getSource(db, body.sourceId);
+      if (!source) return json(res, { error: 'source not found' }, 404);
+      subscribe(db, req.user.id, body.sourceId);
+      return json(res, { ok: true });
+    }
+
+    if (req.method === 'POST' && path === '/api/subscriptions/bulk') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const body = await parseBody(req);
+      if (!Array.isArray(body.sourceIds)) return json(res, { error: 'sourceIds array required' }, 400);
+      const added = bulkSubscribe(db, req.user.id, body.sourceIds);
+      return json(res, { ok: true, added });
+    }
+
+    const subMatch = path.match(/^\/api\/subscriptions\/(\d+)$/);
+    if (req.method === 'DELETE' && subMatch) {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      unsubscribe(db, req.user.id, parseInt(subMatch[1]));
+      return json(res, { ok: true });
+    }
+
     // ── Source resolve endpoint ──
     if (req.method === 'POST' && path === '/api/sources/resolve') {
       if (!req.user) return json(res, { error: 'login required' }, 401);
@@ -496,7 +528,10 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && path === '/api/sources') {
       if (req.user) {
-        return json(res, listSources(db, { userId: req.user.id, includePublic: true }));
+        const sources = listSources(db, { userId: req.user.id, includePublic: true });
+        // Add subscribed field
+        const subs = new Set(listSubscriptions(db, req.user.id).map(s => s.id));
+        return json(res, sources.map(s => ({ ...s, subscribed: subs.has(s.id) })));
       } else {
         return json(res, listSources(db, { includePublic: true }));
       }
@@ -553,13 +588,20 @@ const server = createServer(async (req, res) => {
       const pack = getPackBySlug(db, packInstallMatch[1]);
       if (!pack) return json(res, { error: 'not found' }, 404);
       const sources = JSON.parse(pack.sources_json || '[]');
-      const userSources = listSources(db, { userId: req.user.id });
+      const allSources = listSources(db, {});
       let added = 0;
       for (const s of sources) {
-        // Deduplicate: skip if user already has same type+config
         const configStr = typeof s.config === 'string' ? s.config : JSON.stringify(s.config);
-        const exists = userSources.some(us => us.type === s.type && us.config === configStr);
-        if (!exists) {
+        // Check if source already exists (any user)
+        const existing = allSources.find(us => us.type === s.type && us.config === configStr);
+        if (existing) {
+          // Source exists — just subscribe if not already
+          if (!isSubscribed(db, req.user.id, existing.id)) {
+            subscribe(db, req.user.id, existing.id);
+            added++;
+          }
+        } else {
+          // Create new source (createSource auto-subscribes)
           createSource(db, { name: s.name, type: s.type, config: configStr, isPublic: 0, createdBy: req.user.id });
           added++;
         }

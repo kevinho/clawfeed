@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>AI Digest Dashboard</title>
+<title>AI Digest</title>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>☀️</text></svg>">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -143,7 +143,7 @@
 <body>
 <div class="container">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;">
-    <h1 style="margin:0;cursor:pointer" onclick="goHome()">☀️ AI Digest Dashboard</h1>
+    <h1 style="margin:0;cursor:pointer" onclick="goHome()">☀️ AI Digest</h1>
     <div class="auth-bar" id="authBar"></div>
   </div>
   <p class="subtitle"><span id="subtitleText">Kevin's AI news digest — powered by Lisa</span></p>
@@ -178,7 +178,7 @@ window.onerror = function(msg, src, line) {
 // ── i18n ──
 const I18N = {
   zh: {
-    title: '☀️ AI Digest Dashboard',
+    title: '☀️ AI Digest',
     subtitle: 'AI 新闻简报 — powered by Lisa · v0.5.0',
     tab4h: '4H 简报', tabDaily: '日报', tabWeekly: '周报', tabMonthly: '月报', tabMarks: '📌 Mark 收藏',
     loginBanner: '💡 登录 Google 账号即可收藏文章、管理个人书签',
@@ -205,9 +205,14 @@ const I18N = {
     sourceName: '名称', sourceType: '类型', sourceConfig: '配置 (JSON)', sourcePublic: '公开',
     save: '保存', cancel: '取消',
     noSources: '暂无数据源', confirmDelete: '确定删除此数据源？',
-    emptySourcesTitle: '📡 开始构建你的信息源',
-    emptySourcesDesc: '还没有添加信息源。你可以：',
-    emptySourcesPackHint: '📦 或一键安装推荐源包',
+    emptySourcesTitle: '📡 选择你的信息源',
+    emptySourcesDesc: 'AI 编辑部会从这些源中为你精选内容。\n源越多，筛选质量越高，但你收到的 Digest 篇幅不变。',
+    emptySourcesPackHint: '🚀 安装推荐包，快速开始',
+    emptySourcesAddBtn: '+ 自己添加 Source',
+    subscribedSources: '已订阅',
+    createdByMe: '我创建的',
+    activeCount: (a, t) => `${a}/${t} 活跃`,
+    explorePacks: '🔍 探索更多',
     emptyMarksTitle: '📌 你的收藏夹',
     emptyMarksDesc: '浏览简报时点击 "Mark" 按钮收藏感兴趣的文章。\n收藏的内容会出现在这里。',
     welcomeToast: '🎉 欢迎！点击 📡 管理你的信息源',
@@ -230,7 +235,7 @@ const I18N = {
     newAdded: '新增', skipped: '跳过（已有）',
   },
   en: {
-    title: '☀️ AI Digest Dashboard',
+    title: '☀️ AI Digest',
     subtitle: 'AI news digest — powered by Lisa · v0.5.0',
     tab4h: '4H Briefs', tabDaily: 'Daily', tabWeekly: 'Weekly', tabMonthly: 'Monthly', tabMarks: '📌 Marks',
     loginBanner: '💡 Sign in with Google to bookmark articles and manage your reading list',
@@ -257,9 +262,14 @@ const I18N = {
     sourceName: 'Name', sourceType: 'Type', sourceConfig: 'Config (JSON)', sourcePublic: 'Public',
     save: 'Save', cancel: 'Cancel',
     noSources: 'No sources yet', confirmDelete: 'Delete this source?',
-    emptySourcesTitle: '📡 Build Your Feed',
-    emptySourcesDesc: 'No sources added yet. You can:',
-    emptySourcesPackHint: '📦 Or install a recommended pack',
+    emptySourcesTitle: '📡 Choose Your Sources',
+    emptySourcesDesc: 'AI editors curate content from your sources.\nMore sources = better curation, but your Digest stays the same length.',
+    emptySourcesPackHint: '🚀 Install a recommended pack to get started',
+    emptySourcesAddBtn: '+ Add Source manually',
+    subscribedSources: 'Subscribed',
+    createdByMe: 'Created by me',
+    activeCount: (a, t) => `${a}/${t} active`,
+    explorePacks: '🔍 Explore more',
     emptyMarksTitle: '📌 Your Bookmarks',
     emptyMarksDesc: 'Click the "Mark" button while browsing digests to save interesting articles.\nSaved items will appear here.',
     welcomeToast: '🎉 Welcome! Click 📡 to manage your sources',
@@ -773,6 +783,33 @@ const SOURCE_TYPES = ['twitter_feed', 'twitter_list', 'rss', 'website', 'hackern
 let showSourceForm = false;
 let editingSource = null;
 
+let createdByMeExpanded = false;
+
+function renderSourceCard(s, opts = {}) {
+  const icon = SOURCE_ICONS[s.type] || '📦';
+  const lastFetch = s.last_fetched_at ? s.last_fetched_at.slice(0, 16).replace('T', ' ') : t('never');
+  const showToggle = opts.showToggle !== false;
+  const showEdit = !!opts.showEdit;
+  const showDelete = !!opts.showDelete;
+  const showUnsub = !!opts.showUnsub;
+  return `<div class="source-card" style="padding:12px 16px;">
+    <div class="source-header">
+      <span class="source-name" style="font-size:14px;">${icon} ${s.name}${s.is_public ? ' <span style="font-size:11px;color:#666;font-weight:400;">🌐</span>' : ''}
+        <span style="font-size:11px;color:#6cf;background:#1a1a2e;padding:1px 6px;border-radius:3px;margin-left:4px;">${s.type}</span>
+      </span>
+      <div class="source-actions" style="gap:6px;">
+        ${showToggle ? `<label class="toggle-switch" title="Active"><input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleSource(${s.id}, this.checked)"><span class="toggle-slider"></span></label>` : ''}
+        ${showUnsub ? `<button class="danger" onclick="unsubSource(${s.id})" style="font-size:11px;padding:3px 8px;" title="${lang==='zh'?'退订':'Unsubscribe'}">✕</button>` : ''}
+        ${showEdit ? `<button onclick="editSourceForm(${s.id})" style="font-size:11px;padding:3px 8px;">${t('editSource')}</button>` : ''}
+        ${showDelete ? `<button class="danger" onclick="delSource(${s.id})" style="font-size:11px;padding:3px 8px;">${t('deleteSource')}</button>` : ''}
+      </div>
+    </div>
+    <div class="source-meta" style="font-size:11px;">
+      <span>${t('lastFetched')}: ${lastFetch}</span>
+    </div>
+  </div>`;
+}
+
 async function renderSources() {
   const list = document.getElementById('list');
   list.innerHTML = `<div class="loading">${t('loading')}</div>`;
@@ -780,49 +817,59 @@ async function renderSources() {
     const resp = await fetch(`${API}/sources`, { credentials: 'same-origin' });
     const sources = await resp.json();
     const isLoggedIn = !!currentUser;
-    const mySources = isLoggedIn ? sources.filter(s => s.created_by === currentUser.id) : [];
-    const publicSources = isLoggedIn ? sources.filter(s => s.created_by !== currentUser.id) : sources;
-    const active = mySources.filter(s => s.is_active);
 
-    // ── Section 1: My Sources (logged in) or Public Sources (not logged in) ──
     let html = '';
-    if (isLoggedIn) {
+
+    // ── Not logged in: show read-only sources list ──
+    if (!isLoggedIn) {
       html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📡 ${lang==='zh'?'我的信息源':'My Sources'} <span style="font-size:13px;color:#666;font-weight:400;">${active.length}/${mySources.length} ${lang==='zh'?'活跃':'active'}</span></h2>
+        <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📡 ${lang==='zh'?'信息源':'Sources'} <span style="font-size:13px;color:#666;font-weight:400;">${sources.length} ${lang==='zh'?'个公开源':'public sources'}</span></h2>
       </div>`;
-    } else {
-      html += `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-        <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📡 ${lang==='zh'?'信息源':'Sources'} <span style="font-size:13px;color:#666;font-weight:400;">${publicSources.length} ${lang==='zh'?'个公开源':'public sources'}</span></h2>
-      </div>`;
-      if (publicSources.length) html += `<div style="font-size:12px;color:#555;margin-bottom:16px;">${lang==='zh'?'以下是为本站 Digest 提供内容的信息源':'These are the sources powering this digest'}</div>`;
+      if (sources.length) html += `<div style="font-size:12px;color:#555;margin-bottom:16px;">${lang==='zh'?'以下是为本站 Digest 提供内容的信息源':'These are the sources powering this digest'}</div>`;
+      html += '<div class="digest-list" style="gap:8px;">';
+      for (const s of sources) {
+        const icon = SOURCE_ICONS[s.type] || '📦';
+        html += `<div class="source-card" style="padding:10px 16px;opacity:0.7;">
+          <div class="source-header">
+            <span class="source-name" style="font-size:13px;">${icon} ${s.name}</span>
+          </div>
+          <div class="source-meta" style="font-size:11px;">
+            <span style="background:#1a1a2e;padding:1px 6px;border-radius:3px;color:#6cf;">${s.type}</span>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+      list.innerHTML = html;
+      return;
     }
 
-    // ── Add source (inline, compact) ──
-    if (isLoggedIn) {
-      html += `<div id="smartAddContainer"></div>`;
-      html += `<div id="sourceFormContainer"></div>`;
-    }
+    // Fetch subscriptions
+    const subsResp = await fetch(`${API}/subscriptions`, { credentials: 'same-origin' });
+    const subscriptions = await subsResp.json();
+    const mySources = sources.filter(s => s.created_by === currentUser.id);
+    const activeSubscriptions = subscriptions.filter(s => s.is_active);
 
-    // ── Source list ──
-    const displaySources = isLoggedIn ? mySources : publicSources;
-    if (!displaySources.length) {
-      // Empty state onboarding — smart add + packs integrated
+    // ── Logged in: Empty state (no subscriptions) ──
+    if (!subscriptions.length) {
       html += `<div style="text-align:center;padding:40px 20px;">
         <div style="font-size:28px;margin-bottom:12px;">📡</div>
         <div style="font-size:18px;font-weight:600;margin-bottom:8px;">${t('emptySourcesTitle')}</div>
-        <div style="color:#888;font-size:14px;margin-bottom:24px;">${t('emptySourcesDesc')}</div>
+        <div style="color:#888;font-size:14px;margin-bottom:24px;white-space:pre-line;">${t('emptySourcesDesc')}</div>
+        <div style="display:flex;gap:12px;justify-content:center;flex-wrap:wrap;">
+          <button onclick="renderPacksSection()" style="padding:10px 24px;background:#1a3a1a;border:1px solid #40c040;border-radius:8px;color:#40c040;cursor:pointer;font-size:14px;transition:all .2s;">${t('emptySourcesPackHint')}</button>
+          <button onclick="document.getElementById('smart_url')?.focus()" style="padding:10px 24px;background:#2a2a2a;border:1px solid #444;border-radius:8px;color:#aaa;cursor:pointer;font-size:14px;transition:all .2s;">${t('emptySourcesAddBtn')}</button>
+        </div>
       </div>`;
-      // Inline smart add
       html += `<div id="smartAddContainer"></div>`;
       html += `<div id="sourceFormContainer"></div>`;
-      // Packs section
+      // Recommended packs
       html += `<div style="margin-top:24px;padding-top:20px;border-top:1px solid #222;">
-        <div style="font-size:15px;font-weight:600;margin-bottom:12px;">${t('emptySourcesPackHint')}</div>
+        <div style="font-size:15px;font-weight:600;margin-bottom:12px;">📦 ${lang==='zh'?'推荐 Packs':'Recommended Packs'}</div>
         <div id="emptyPacksList"><div class="loading">${t('loading')}</div></div>
       </div>`;
       list.innerHTML = html;
       renderSmartAdd();
-      // Load public packs inline
+      // Load packs inline
       fetch(`${API}/packs`, { credentials: 'same-origin' }).then(r => r.json()).then(packs => {
         const container = document.getElementById('emptyPacksList');
         if (!container) return;
@@ -853,61 +900,56 @@ async function renderSources() {
         }).join('') + '</div>';
       }).catch(() => {});
       return;
-    } else {
-      html += '<div class="digest-list" style="gap:8px;">';
-      for (const s of displaySources) {
-        const icon = SOURCE_ICONS[s.type] || '📦';
-        const lastFetch = s.last_fetched_at ? s.last_fetched_at.slice(0, 16).replace('T', ' ') : t('never');
-        html += `<div class="source-card" style="padding:12px 16px;">
-          <div class="source-header">
-            <span class="source-name" style="font-size:14px;">${icon} ${s.name}${s.is_public ? ' <span style="font-size:11px;color:#666;font-weight:400;">🌐</span>' : ''}</span>
-            <div class="source-actions" style="gap:6px;">
-              ${(currentUser && s.created_by === currentUser.id) ? `<label class="toggle-switch" title="Active"><input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleSource(${s.id}, this.checked)"><span class="toggle-slider"></span></label>
-              <button onclick="editSourceForm(${s.id})" style="font-size:11px;padding:3px 8px;">${t('editSource')}</button>
-              <button class="danger" onclick="delSource(${s.id})" style="font-size:11px;padding:3px 8px;">${t('deleteSource')}</button>` : ''}
-            </div>
-          </div>
-          <div class="source-meta" style="font-size:11px;">
-            <span style="background:#1a1a2e;padding:1px 6px;border-radius:3px;color:#6cf;">${s.type}</span>
-            <span>${t('lastFetched')}: ${lastFetch}</span>
-          </div>
-        </div>`;
-      }
-      html += '</div>';
     }
 
-    // ── Public sources for logged-in users ──
-    if (isLoggedIn && publicSources.length) {
-      html += `<div style="border-top:1px solid #222;margin-top:20px;padding-top:16px;">
-        <h2 style="margin:0 0 12px;font-size:14px;color:#888;">🌐 ${lang==='zh'?'公开信息源':'Public Sources'} <span style="font-size:12px;color:#555;">${publicSources.length}</span></h2>
-        <div class="digest-list" style="gap:8px;">`;
-      for (const s of publicSources) {
-        const icon = SOURCE_ICONS[s.type] || '📦';
-        html += `<div class="source-card" style="padding:10px 16px;opacity:0.7;">
-          <div class="source-header">
-            <span class="source-name" style="font-size:13px;">${icon} ${s.name} <span style="font-size:11px;color:#555;">by ${s.creator_name || '?'}</span></span>
-          </div>
-          <div class="source-meta" style="font-size:11px;">
-            <span style="background:#1a1a2e;padding:1px 6px;border-radius:3px;color:#6cf;">${s.type}</span>
-          </div>
-        </div>`;
-      }
-      html += '</div></div>';
-    }
+    // ── Logged in, has subscriptions: Non-empty state ──
 
-    // ── Section 2: Packs (separated) ──
-    if (isLoggedIn) {
-      html += `<div style="border-top:1px solid #222;margin-top:24px;padding-top:20px;">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
-          <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📦 ${lang==='zh'?'Source Packs':'Source Packs'}</h2>
-          <div style="display:flex;gap:8px;">
-            <button onclick="showCreatePackModal()" style="padding:5px 12px;background:transparent;border:1px solid #333;border-radius:6px;color:#888;cursor:pointer;font-size:12px;transition:all .2s;" onmouseover="this.style.borderColor='#40c040';this.style.color='#40c040'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${lang==='zh'?'分享':'Share'}</button>
-            <button onclick="renderPacksSection()" style="padding:5px 12px;background:transparent;border:1px solid #333;border-radius:6px;color:#888;cursor:pointer;font-size:12px;transition:all .2s;" onmouseover="this.style.borderColor='#6cf';this.style.color='#6cf'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${lang==='zh'?'浏览':'Explore'}</button>
-          </div>
+    // Page title
+    html += `<h2 style="margin:0 0 16px;font-size:16px;color:#e0e0e0;">📡 ${lang==='zh'?'我的信息源':'My Sources'}</h2>`;
+
+    // Section 1: Subscribed (from subscriptions API)
+    html += `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:6px;border-bottom:1px solid #282828;">
+      <span style="font-size:13px;color:#888;font-weight:600;letter-spacing:0.5px;">${t('subscribedSources')}</span>
+      <span style="font-size:12px;color:#555;">${t('activeCount')(activeSubscriptions.length, subscriptions.length)}</span>
+    </div>`;
+    html += '<div class="digest-list" style="gap:8px;margin-bottom:16px;">';
+    for (const s of subscriptions) {
+      html += renderSourceCard(s, { showToggle: true, showUnsub: true });
+    }
+    html += '</div>';
+
+    // Section 2: Add Source + Explore more (action buttons)
+    html += `<div style="display:flex;gap:10px;margin-bottom:20px;flex-wrap:wrap;">
+      <div id="smartAddContainer" style="flex:1;min-width:280px;"></div>
+    </div>`;
+    html += `<div id="sourceFormContainer"></div>`;
+    html += `<div style="margin-bottom:20px;">
+      <button onclick="renderPacksSection()" style="padding:6px 16px;background:transparent;border:1px solid #333;border-radius:6px;color:#888;cursor:pointer;font-size:13px;transition:all .2s;" onmouseover="this.style.borderColor='#6cf';this.style.color='#6cf'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${t('explorePacks')}</button>
+    </div>`;
+
+    // Section 3: Created by me (collapsible)
+    html += `<div style="border-top:1px solid #222;padding-top:16px;margin-bottom:20px;">
+      <div onclick="createdByMeExpanded=!createdByMeExpanded;renderSources()" style="cursor:pointer;display:flex;align-items:center;gap:8px;margin-bottom:${createdByMeExpanded ? '12' : '0'}px;user-select:none;">
+        <span style="font-size:12px;color:#666;transition:transform .2s;display:inline-block;transform:rotate(${createdByMeExpanded ? '90' : '0'}deg);">▶</span>
+        <span style="font-size:13px;color:#888;font-weight:600;">${t('createdByMe')}</span>
+        <span style="font-size:12px;color:#555;">(${mySources.length})</span>
+      </div>
+      ${createdByMeExpanded ? `<div class="digest-list" style="gap:8px;">
+        ${mySources.map(s => renderSourceCard(s, { showToggle: false, showEdit: true, showDelete: true })).join('')}
+      </div>` : ''}
+    </div>`;
+
+    // Section 4: Source Packs
+    html += `<div style="border-top:1px solid #222;padding-top:20px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+        <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📦 Source Packs</h2>
+        <div style="display:flex;gap:8px;">
+          <button onclick="showCreatePackModal()" style="padding:5px 12px;background:transparent;border:1px solid #333;border-radius:6px;color:#888;cursor:pointer;font-size:12px;transition:all .2s;" onmouseover="this.style.borderColor='#40c040';this.style.color='#40c040'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${lang==='zh'?'分享':'Share'}</button>
+          <button onclick="renderPacksSection()" style="padding:5px 12px;background:transparent;border:1px solid #333;border-radius:6px;color:#888;cursor:pointer;font-size:12px;transition:all .2s;" onmouseover="this.style.borderColor='#6cf';this.style.color='#6cf'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${lang==='zh'?'浏览':'Explore'}</button>
         </div>
-        <div style="color:#555;font-size:12px;">${lang==='zh'?'把你的信息源打包分享给别人，或安装别人的源合集':'Package your sources to share, or install curated packs from others'}</div>
-      </div>`;
-    }
+      </div>
+      <div style="color:#555;font-size:12px;">${lang==='zh'?'把你的信息源打包分享给别人，或安装别人的源合集':'Package your sources to share, or install curated packs from others'}</div>
+    </div>`;
 
     list.innerHTML = html;
     renderSmartAdd();
@@ -1111,6 +1153,12 @@ async function toggleSource(id, active) {
   await fetch(`${API}/sources/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ isActive: active }) });
 }
 
+async function unsubSource(id) {
+  await fetch(`${API}/subscriptions/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+  showToast(lang==='zh'?'已退订':'Unsubscribed');
+  renderSources();
+}
+
 async function delSource(id) {
   if (!confirm(t('confirmDelete'))) return;
   await fetch(`${API}/sources/${id}`, { method: 'DELETE', credentials: 'same-origin' });
@@ -1223,12 +1271,14 @@ async function installPack(slug, btn) {
     const r = await fetch(`${API}/packs/${slug}/install`, { method: 'POST', credentials: 'same-origin' });
     const d = await r.json();
     if (d.ok) {
-      btn.textContent = t('installed');
-      btn.classList.add('done');
       let msg = t('packInstalled');
       if (d.added > 0) msg += ` ${d.added} ${t('newAdded')}`;
       if (d.skipped > 0) msg += `, ${d.skipped} ${t('skipped')}`;
       showToast(msg);
+      // Force refresh sources view so user sees their new subscriptions
+      currentType = 'sources';
+      document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+      await renderSources();
     } else {
       showToast(d.error || 'Error');
       btn.textContent = t('installPack');

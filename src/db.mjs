@@ -66,6 +66,13 @@ export function getDb(dbPath) {
   } catch (e) {
     if (!e.message.includes('already exists')) console.error('Migration 005:', e.message);
   }
+  // Run subscriptions migration (idempotent)
+  try {
+    const sql6 = readFileSync(join(ROOT, 'migrations', '006_subscriptions.sql'), 'utf8');
+    _db.exec(sql6);
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.error('Migration 006:', e.message);
+  }
   // Backfill slugs for existing users
   _backfillSlugs(_db);
   return _db;
@@ -174,7 +181,10 @@ export function upsertUser(db, { googleId, email, name, avatar }) {
     candidate = slug + i++;
   }
   db.prepare('INSERT INTO users (google_id, email, name, avatar, slug) VALUES (?, ?, ?, ?, ?)').run(googleId, email, name, avatar, candidate);
-  return db.prepare('SELECT * FROM users WHERE google_id = ?').get(googleId);
+  const newUser = db.prepare('SELECT * FROM users WHERE google_id = ?').get(googleId);
+  // Auto-subscribe new user to all public sources
+  db.prepare('INSERT OR IGNORE INTO user_subscriptions (user_id, source_id) SELECT ?, id FROM sources WHERE is_public = 1').run(newUser.id);
+  return newUser;
 }
 
 export function createSession(db, { id, userId, expiresAt }) {
@@ -246,7 +256,14 @@ export function createSource(db, { name, type, config = '{}', isPublic = 0, crea
   const result = db.prepare(
     'INSERT INTO sources (name, type, config, is_public, created_by) VALUES (?, ?, ?, ?, ?)'
   ).run(name, type, config, isPublic ? 1 : 0, createdBy);
-  return { id: result.lastInsertRowid };
+  const sourceId = result.lastInsertRowid;
+  // Auto-subscribe creator
+  if (createdBy) {
+    try {
+      db.prepare('INSERT OR IGNORE INTO user_subscriptions (user_id, source_id) VALUES (?, ?)').run(createdBy, sourceId);
+    } catch {}
+  }
+  return { id: sourceId };
 }
 
 export function updateSource(db, id, patch) {
@@ -311,6 +328,48 @@ export function incrementPackInstall(db, id) {
 
 export function deletePack(db, id) {
   return db.prepare('DELETE FROM source_packs WHERE id = ?').run(id);
+}
+
+// ── Subscriptions ──
+
+export function listSubscriptions(db, userId) {
+  return db.prepare(`
+    SELECT s.*, us.created_at as subscribed_at, u.name as creator_name
+    FROM user_subscriptions us
+    JOIN sources s ON us.source_id = s.id
+    LEFT JOIN users u ON s.created_by = u.id
+    WHERE us.user_id = ?
+    ORDER BY us.created_at DESC
+  `).all(userId);
+}
+
+export function subscribe(db, userId, sourceId) {
+  return db.prepare('INSERT OR IGNORE INTO user_subscriptions (user_id, source_id) VALUES (?, ?)').run(userId, sourceId);
+}
+
+export function unsubscribe(db, userId, sourceId) {
+  return db.prepare('DELETE FROM user_subscriptions WHERE user_id = ? AND source_id = ?').run(userId, sourceId);
+}
+
+export function bulkSubscribe(db, userId, sourceIds) {
+  const stmt = db.prepare('INSERT OR IGNORE INTO user_subscriptions (user_id, source_id) VALUES (?, ?)');
+  const run = db.transaction((ids) => {
+    let added = 0;
+    for (const sid of ids) {
+      const r = stmt.run(userId, sid);
+      added += r.changes;
+    }
+    return added;
+  });
+  return run(sourceIds);
+}
+
+export function isSubscribed(db, userId, sourceId) {
+  return !!db.prepare('SELECT 1 FROM user_subscriptions WHERE user_id = ? AND source_id = ?').get(userId, sourceId);
+}
+
+export function getSubscriberCount(db, sourceId) {
+  return db.prepare('SELECT COUNT(*) as count FROM user_subscriptions WHERE source_id = ?').get(sourceId).count;
 }
 
 // ── Config ──
