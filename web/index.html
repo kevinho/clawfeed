@@ -631,6 +631,7 @@ async function renderSources() {
     const resp = await fetch(`${API}/sources`, { credentials: 'same-origin' });
     const sources = await resp.json();
     const isAdmin = currentUser && currentUser.is_admin;
+    const isLoggedIn = !!currentUser;
     const active = sources.filter(s => s.is_active);
     const types = [...new Set(sources.map(s => s.type))];
 
@@ -640,7 +641,7 @@ async function renderSources() {
       <div class="mark-stat"><div class="num">${types.length}</div><div class="label">${t('sourcesTypes')}</div></div>
     </div>`;
 
-    if (isAdmin) {
+    if (isLoggedIn) {
       html += `<div style="margin-bottom:16px;"><button onclick="toggleSourceForm()" style="padding:8px 18px;background:#1a3a1a;border:1px solid #40c040;border-radius:8px;color:#40c040;cursor:pointer;font-size:13px;transition:all .2s;">${t('addSource')}</button></div>`;
       html += `<div id="sourceFormContainer"></div>`;
     }
@@ -656,7 +657,7 @@ async function renderSources() {
           <div class="source-header">
             <span class="source-name">${icon} ${s.name}${s.is_public ? ' <span style="font-size:11px;color:#666;font-weight:400;">🌐</span>' : ''}</span>
             <div class="source-actions">
-              ${isAdmin ? `<label class="toggle-switch" title="Active"><input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleSource(${s.id}, this.checked)"><span class="toggle-slider"></span></label>
+              ${(isAdmin || (currentUser && s.created_by === currentUser.id)) ? `<label class="toggle-switch" title="Active"><input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleSource(${s.id}, this.checked)"><span class="toggle-slider"></span></label>
               <button onclick="editSourceForm(${s.id})">${t('editSource')}</button>
               <button class="danger" onclick="delSource(${s.id})">${t('deleteSource')}</button>` : ''}
             </div>

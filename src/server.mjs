@@ -308,21 +308,27 @@ const server = createServer(async (req, res) => {
     }
 
     if (req.method === 'POST' && path === '/api/sources') {
-      if (!req.user || !req.user.is_admin) return json(res, { error: 'admin required' }, 403);
+      if (!req.user) return json(res, { error: 'login required' }, 401);
       const body = await parseBody(req);
       const result = createSource(db, { ...body, createdBy: req.user.id });
       return json(res, result, 201);
     }
 
     if (req.method === 'PUT' && sourceMatch) {
-      if (!req.user || !req.user.is_admin) return json(res, { error: 'admin required' }, 403);
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+      const s = getSource(db, parseInt(sourceMatch[1]));
+      if (!s) return json(res, { error: 'not found' }, 404);
+      if (!req.user.is_admin && s.created_by !== req.user.id) return json(res, { error: 'forbidden' }, 403);
       const body = await parseBody(req);
       updateSource(db, parseInt(sourceMatch[1]), body);
       return json(res, { ok: true });
     }
 
     if (req.method === 'DELETE' && sourceMatch) {
-      if (!req.user || !req.user.is_admin) return json(res, { error: 'admin required' }, 403);
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+      const s = getSource(db, parseInt(sourceMatch[1]));
+      if (!s) return json(res, { error: 'not found' }, 404);
+      if (!req.user.is_admin && s.created_by !== req.user.id) return json(res, { error: 'forbidden' }, 403);
       deleteSource(db, parseInt(sourceMatch[1]));
       return json(res, { ok: true });
     }
