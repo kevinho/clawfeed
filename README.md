@@ -2,7 +2,7 @@
 
 ![Dashboard](docs/screenshot.png)
 
-AI-powered news digest tool that generates structured summaries from Twitter/RSS feeds. Works as a standalone service or as an [OpenClaw](https://github.com/openclaw/openclaw) / [Zylos](https://github.com/AiExMachina/Zylos) skill.
+AI-powered news digest tool that generates structured summaries from Twitter/RSS feeds. Works as a standalone service or as an [OpenClaw](https://github.com/openclaw/openclaw) / [Zylos](https://github.com/zylos-ai) skill.
 
 ## Features
 
@@ -38,7 +38,7 @@ OpenClaw will auto-detect `SKILL.md` and load the skill. The agent can then:
 
 ```bash
 # Clone into Zylos skills directory
-cd ~/.zylos/skills/
+cd ~/.zylos/skills/  # or wherever Zylos looks for skills
 git clone https://github.com/kevinho/ai-digest.git
 ```
 
