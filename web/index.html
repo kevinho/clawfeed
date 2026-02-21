@@ -758,50 +758,57 @@ async function renderSources() {
     const active = sources.filter(s => s.is_active);
     const types = [...new Set(sources.map(s => s.type))];
 
-    let html = `<div class="mark-stats">
-      <div class="mark-stat"><div class="num">${sources.length}</div><div class="label">${t('sourcesTotal')}</div></div>
-      <div class="mark-stat"><div class="num" style="color:#40c040">${active.length}</div><div class="label">${t('sourcesActive')}</div></div>
-      <div class="mark-stat"><div class="num">${types.length}</div><div class="label">${t('sourcesTypes')}</div></div>
+    // ── Section 1: My Sources header with count + add ──
+    let html = `<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+      <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📡 ${lang==='zh'?'我的信息源':'My Sources'} <span style="font-size:13px;color:#666;font-weight:400;">${active.length}/${sources.length} ${lang==='zh'?'活跃':'active'}</span></h2>
     </div>`;
 
-    // Pack buttons
-    if (isLoggedIn) {
-      html += `<div style="display:flex;gap:8px;margin-bottom:16px;">
-        <button onclick="showCreatePackModal()" style="padding:8px 16px;background:#2a2a2a;border:1px solid #444;border-radius:8px;color:#aaa;cursor:pointer;font-size:13px;transition:all .2s;" onmouseover="this.style.borderColor='#666';this.style.color='#fff'" onmouseout="this.style.borderColor='#444';this.style.color='#aaa'">${t('sharePack')}</button>
-        <button onclick="renderPacksSection()" style="padding:8px 16px;background:#2a2a2a;border:1px solid #444;border-radius:8px;color:#aaa;cursor:pointer;font-size:13px;transition:all .2s;" onmouseover="this.style.borderColor='#666';this.style.color='#fff'" onmouseout="this.style.borderColor='#444';this.style.color='#aaa'">${t('browsePacks')}</button>
-      </div>`;
-    }
-
+    // ── Add source (inline, compact) ──
     if (isLoggedIn) {
       html += `<div id="smartAddContainer"></div>`;
       html += `<div id="sourceFormContainer"></div>`;
     }
 
+    // ── Source list ──
     if (!sources.length) {
-      html += `<div class="empty">${t('noSources')}</div>`;
+      html += `<div class="empty" style="padding:30px 0;">${t('noSources')}</div>`;
     } else {
-      html += '<div class="digest-list">';
+      html += '<div class="digest-list" style="gap:8px;">';
       for (const s of sources) {
         const icon = SOURCE_ICONS[s.type] || '📦';
         const lastFetch = s.last_fetched_at ? s.last_fetched_at.slice(0, 16).replace('T', ' ') : t('never');
-        html += `<div class="source-card">
+        html += `<div class="source-card" style="padding:12px 16px;">
           <div class="source-header">
-            <span class="source-name">${icon} ${s.name}${s.is_public ? ' <span style="font-size:11px;color:#666;font-weight:400;">🌐</span>' : ''}</span>
-            <div class="source-actions">
+            <span class="source-name" style="font-size:14px;">${icon} ${s.name}${s.is_public ? ' <span style="font-size:11px;color:#666;font-weight:400;">🌐</span>' : ''}</span>
+            <div class="source-actions" style="gap:6px;">
               ${(currentUser && s.created_by === currentUser.id) ? `<label class="toggle-switch" title="Active"><input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleSource(${s.id}, this.checked)"><span class="toggle-slider"></span></label>
-              <button onclick="editSourceForm(${s.id})">${t('editSource')}</button>
-              <button class="danger" onclick="delSource(${s.id})">${t('deleteSource')}</button>` : ''}
+              <button onclick="editSourceForm(${s.id})" style="font-size:11px;padding:3px 8px;">${t('editSource')}</button>
+              <button class="danger" onclick="delSource(${s.id})" style="font-size:11px;padding:3px 8px;">${t('deleteSource')}</button>` : ''}
             </div>
           </div>
-          <div class="source-meta">
-            <span>${s.type}</span>
+          <div class="source-meta" style="font-size:11px;">
+            <span style="background:#1a1a2e;padding:1px 6px;border-radius:3px;color:#6cf;">${s.type}</span>
             <span>${t('lastFetched')}: ${lastFetch}</span>
-            <span>${t('fetchCount')}: ${s.fetch_count}</span>
           </div>
         </div>`;
       }
       html += '</div>';
     }
+
+    // ── Section 2: Packs (separated) ──
+    if (isLoggedIn) {
+      html += `<div style="border-top:1px solid #222;margin-top:24px;padding-top:20px;">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <h2 style="margin:0;font-size:16px;color:#e0e0e0;">📦 ${lang==='zh'?'Source Packs':'Source Packs'}</h2>
+          <div style="display:flex;gap:8px;">
+            <button onclick="showCreatePackModal()" style="padding:5px 12px;background:transparent;border:1px solid #333;border-radius:6px;color:#888;cursor:pointer;font-size:12px;transition:all .2s;" onmouseover="this.style.borderColor='#40c040';this.style.color='#40c040'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${lang==='zh'?'分享':'Share'}</button>
+            <button onclick="renderPacksSection()" style="padding:5px 12px;background:transparent;border:1px solid #333;border-radius:6px;color:#888;cursor:pointer;font-size:12px;transition:all .2s;" onmouseover="this.style.borderColor='#6cf';this.style.color='#6cf'" onmouseout="this.style.borderColor='#333';this.style.color='#888'">${lang==='zh'?'浏览':'Explore'}</button>
+          </div>
+        </div>
+        <div style="color:#555;font-size:12px;">${lang==='zh'?'把你的信息源打包分享给别人，或安装别人的源合集':'Package your sources to share, or install curated packs from others'}</div>
+      </div>`;
+    }
+
     list.innerHTML = html;
     renderSmartAdd();
     if (showSourceForm) renderSourceForm();
