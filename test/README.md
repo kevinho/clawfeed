@@ -165,6 +165,35 @@ ID range 100–199 reserved for test data; teardown cleans by range.
 
 ---
 
+### 16. Soft Delete Sources (planned)
+| # | Case | Method |
+|---|------|--------|
+| 16.1 | Delete source → `is_deleted=1`, not removed from DB | `DELETE /sources/:id` |
+| 16.2 | Deleted source hidden from `GET /sources` | `GET /sources` |
+| 16.3 | Subscriber sees deleted source as "已停用" | `GET /subscriptions` |
+| 16.4 | Pack install skips deleted source (no zombie) | `POST /packs/:slug/install` |
+| 16.5 | Pack install skips deleted, creates non-deleted only | `POST /packs/:slug/install` (mixed) |
+| 16.6 | Re-install after source deleted → 0 added (not recreated) | `POST /packs/:slug/install` |
+| 16.7 | Deleted source not in feed output | `GET /feed/:slug.json` |
+
+### 17. Source Dedup at Scale (planned)
+| # | Case | Method |
+|---|------|--------|
+| 17.1 | Two users create same RSS URL → same source, not duplicate | `POST /sources` ×2 |
+| 17.2 | Subscribe to existing public source (no new row in sources) | `POST /subscriptions` |
+| 17.3 | Pack install matches by type+config, reuses existing source | `POST /packs/:slug/install` |
+| 17.4 | Bulk subscribe 100 sources (perf baseline) | `POST /subscriptions/bulk` |
+| 17.5 | Same subscription combo = same digest cache key | `GET /api/digest-combinations` (future) |
+
+### 18. Subscription Volume (planned)
+| # | Case | Method |
+|---|------|--------|
+| 18.1 | User with 100 subscriptions → list returns all | `GET /subscriptions` |
+| 18.2 | Source with 100 subscribers → subscriber count correct | `GET /sources/:id` |
+| 18.3 | Delete source with 100 subscribers → all subs marked inactive | `DELETE /sources/:id` |
+
+---
+
 ## Known Issues / TODOs
 
 - [ ] Empty source name accepted (no server-side validation) — test 14.4
@@ -180,6 +209,12 @@ ID range 100–199 reserved for test data; teardown cleans by range.
 - Initial E2E suite: 44 tests across 14 categories
 - 3 test users (Elon, Kevin, Coco) with hardcoded sessions
 - Manual browser testing for UI flows
+
+### v3 — 2026-02-22 (planned)
+- Soft delete test cases (Section 16): 7 tests covering is_deleted flag, pack skip, no zombie
+- Source dedup tests (Section 17): 5 tests for same-URL dedup, type+config matching
+- Subscription volume tests (Section 18): 3 tests for scale baseline (100 subs/source)
+- Total planned: ~67 assertions
 
 ### v2 — 2026-02-22
 - Refactored to 4 test users (Alice, Bob, Carol, Dave) with ID range 100-199
