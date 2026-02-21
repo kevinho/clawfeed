@@ -424,7 +424,55 @@ AI 编辑部会从这些源中为你精选内容。
 - `/api/raw-items/*` — 需要登录 + admin（调试用）
 - 其他现有 API 行为不变，新增 user_id 感知
 
-## 9. 产品 Roadmap
+## 9. Scale 分析
+
+### 假设：10K 用户，100 sources/user
+
+```
+10K users × 100 subscriptions = 1M subscription rows
+unique sources << 1M（热门源大量重叠）
+实际 unique sources ≈ 5K–50K
+```
+
+### 采集层
+
+| 挑战 | 方案 |
+|------|------|
+| 50K sources 轮询 | Worker pool + priority queue，按 `last_fetched_at` + 频率排序 |
+| 热源 vs 冷源 | 订阅人数多的源频率高（5min），冷门的低（1h） |
+| 采集单点瓶颈 | 无状态 worker，水平扩展；源按 hash 分片 |
+| raw_items 膨胀 | TTL 清理（30 天）或按月分表 |
+
+### 生成层（主要瓶颈）
+
+```
+10K users × 6 digests/day = 60K LLM calls/day
+```
+
+**优化策略：**
+1. **订阅组合去重** — cache key = `hash(sorted(source_ids))`，相同组合只生成一次
+   - 实际上大部分用户组合高度重叠，去重后可能只有几百个 unique 组合
+2. **分层生成** — 先 per-source 摘要（共享），再 per-combination 筛选排序
+3. **增量生成** — 只处理上次生成后新增的 raw_items
+
+### 存储估算
+
+| 表 | 规模 | 备注 |
+|----|------|------|
+| `user_subscriptions` | 1M rows | 简单索引，无压力 |
+| `raw_items` | 30M rows（50K×20×30d） | 需要分区或 TTL |
+| `digests` | 远小于用户数 | 按订阅组合缓存 |
+| `sources` | 5K–50K rows | 轻量 |
+
+### 关键设计原则
+
+- **Source 级采集，与用户无关** — 同一 Source 无论多少人订阅，只抓一次
+- **Digest 按组合缓存** — 相同订阅组合 = 相同输出，不按用户重复生成
+- **写放大最小化** — 软删除（一次 UPDATE）代替硬删除 + 级联清理
+
+---
+
+## 10. 产品 Roadmap
 
 ### 已完成 ✅
 
