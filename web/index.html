@@ -78,6 +78,30 @@
   .mark-stat { background: #1a1a1a; border: 1px solid #282828; border-radius: 8px; padding: 12px 16px; flex: 1; text-align: center; }
   .mark-stat .num { font-size: 24px; font-weight: 700; }
   .mark-stat .label { font-size: 12px; color: #888; margin-top: 2px; }
+  .source-card { background: #1a1a1a; border: 1px solid #282828; border-radius: 12px; padding: 16px 20px; transition: all 0.2s; }
+  .source-card:hover { border-color: #444; background: #1e1e1e; }
+  .source-card .source-header { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+  .source-card .source-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .source-card .source-meta { font-size: 12px; color: #666; margin-top: 6px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .source-actions { display: flex; gap: 6px; align-items: center; }
+  .source-actions button { padding: 4px 10px; font-size: 12px; background: #2a2a2a; border: 1px solid #444; border-radius: 6px; color: #aaa; cursor: pointer; transition: all .15s; }
+  .source-actions button:hover { border-color: #666; color: #fff; }
+  .source-actions button.danger:hover { border-color: #f04040; color: #f04040; }
+  .toggle-switch { position: relative; display: inline-block; width: 36px; height: 20px; cursor: pointer; }
+  .toggle-switch input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; inset: 0; background: #333; border-radius: 20px; transition: .3s; }
+  .toggle-slider:before { content: ''; position: absolute; height: 14px; width: 14px; left: 3px; bottom: 3px; background: #888; border-radius: 50%; transition: .3s; }
+  .toggle-switch input:checked + .toggle-slider { background: #2a5a2a; }
+  .toggle-switch input:checked + .toggle-slider:before { transform: translateX(16px); background: #40c040; }
+  .source-form { background: #1a1a1a; border: 1px solid #333; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .source-form .form-row { margin-bottom: 12px; }
+  .source-form label { display: block; font-size: 12px; color: #888; margin-bottom: 4px; }
+  .source-form input, .source-form select, .source-form textarea { width: 100%; padding: 8px 12px; background: #0f0f0f; border: 1px solid #333; border-radius: 6px; color: #e0e0e0; font-size: 13px; font-family: inherit; }
+  .source-form textarea { min-height: 60px; resize: vertical; font-family: monospace; }
+  .source-form .form-actions { display: flex; gap: 8px; margin-top: 16px; }
+  .source-form .form-actions button { padding: 8px 20px; border-radius: 6px; border: 1px solid #444; background: #2a2a2a; color: #ccc; cursor: pointer; font-size: 13px; transition: all .2s; }
+  .source-form .form-actions button.primary { background: #1a3a1a; border-color: #40c040; color: #40c040; }
+  .source-form .form-actions button:hover { border-color: #666; color: #fff; }
 </style>
 </head>
 <body>
@@ -93,6 +117,7 @@
     <div class="tab" data-type="weekly">周报</div>
     <div class="tab" data-type="monthly">月报</div>
     <div class="tab" data-type="marks">📌 Mark 收藏</div>
+    <div class="tab" data-type="sources">⚙️ Sources</div>
   </div>
   <div id="loginBanner" class="login-banner" style="display:none;">
     <span>💡 登录 Google 账号即可收藏文章、管理个人书签</span>
@@ -135,6 +160,14 @@ const I18N = {
     marked: '✅ 已 Mark', mark: '📌 Mark',
     items: '条', cannotLoadMarks: '无法加载 Marks 数据',
     weekdays: ['周日','周一','周二','周三','周四','周五','周六'],
+    tabSources: '⚙️ 数据源',
+    sourcesTotal: '总数', sourcesActive: '活跃', sourcesTypes: '类型',
+    addSource: '➕ 添加源', editSource: '编辑', deleteSource: '删除',
+    sourceName: '名称', sourceType: '类型', sourceConfig: '配置 (JSON)', sourcePublic: '公开',
+    save: '保存', cancel: '取消',
+    noSources: '暂无数据源', confirmDelete: '确定删除此数据源？',
+    lastFetched: '上次抓取', fetchCount: '抓取次数', never: '从未',
+    sourceCreated: '✅ 数据源已创建', sourceUpdated: '✅ 已更新', sourceDeleted: '✅ 已删除',
   },
   en: {
     title: '☀️ AI Digest Dashboard',
@@ -158,6 +191,14 @@ const I18N = {
     marked: '✅ Marked', mark: '📌 Mark',
     items: 'items', cannotLoadMarks: 'Cannot load marks',
     weekdays: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
+    tabSources: '⚙️ Sources',
+    sourcesTotal: 'Total', sourcesActive: 'Active', sourcesTypes: 'Types',
+    addSource: '➕ Add Source', editSource: 'Edit', deleteSource: 'Delete',
+    sourceName: 'Name', sourceType: 'Type', sourceConfig: 'Config (JSON)', sourcePublic: 'Public',
+    save: 'Save', cancel: 'Cancel',
+    noSources: 'No sources yet', confirmDelete: 'Delete this source?',
+    lastFetched: 'Last fetched', fetchCount: 'Fetches', never: 'Never',
+    sourceCreated: '✅ Source created', sourceUpdated: '✅ Updated', sourceDeleted: '✅ Deleted',
   }
 };
 
@@ -179,6 +220,7 @@ function applyLang() {
   document.querySelector('[data-type="weekly"]').textContent = t('tabWeekly');
   document.querySelector('[data-type="monthly"]').textContent = t('tabMonthly');
   document.querySelector('[data-type="marks"]').textContent = t('tabMarks');
+  document.querySelector('[data-type="sources"]').textContent = t('tabSources');
   const banner = document.getElementById('loginBanner');
   if (banner) banner.querySelector('span').textContent = t('loginBanner');
   renderAuthBar();
@@ -384,6 +426,7 @@ async function renderList(append = false) {
   viewer.style.display = 'none';
 
   if (currentType === 'marks') { renderMarks(); return; }
+  if (currentType === 'sources') { renderSources(); return; }
 
   if (!append) {
     currentOffset = 0;
@@ -576,6 +619,128 @@ function renderMarkCard(m) {
   </div>`;
 }
 
+const SOURCE_ICONS = { twitter_feed: '🐦', twitter_list: '🐦', rss: '📡', website: '🌐', hackernews: '🔶', reddit: '👽', github_trending: '⭐', custom_api: '🔌' };
+const SOURCE_TYPES = ['twitter_feed', 'twitter_list', 'rss', 'website', 'hackernews', 'reddit', 'github_trending', 'custom_api'];
+let showSourceForm = false;
+let editingSource = null;
+
+async function renderSources() {
+  const list = document.getElementById('list');
+  list.innerHTML = `<div class="loading">${t('loading')}</div>`;
+  try {
+    const resp = await fetch(`${API}/sources`, { credentials: 'same-origin' });
+    const sources = await resp.json();
+    const isAdmin = currentUser && currentUser.is_admin;
+    const active = sources.filter(s => s.is_active);
+    const types = [...new Set(sources.map(s => s.type))];
+
+    let html = `<div class="mark-stats">
+      <div class="mark-stat"><div class="num">${sources.length}</div><div class="label">${t('sourcesTotal')}</div></div>
+      <div class="mark-stat"><div class="num" style="color:#40c040">${active.length}</div><div class="label">${t('sourcesActive')}</div></div>
+      <div class="mark-stat"><div class="num">${types.length}</div><div class="label">${t('sourcesTypes')}</div></div>
+    </div>`;
+
+    if (isAdmin) {
+      html += `<div style="margin-bottom:16px;"><button onclick="toggleSourceForm()" style="padding:8px 18px;background:#1a3a1a;border:1px solid #40c040;border-radius:8px;color:#40c040;cursor:pointer;font-size:13px;transition:all .2s;">${t('addSource')}</button></div>`;
+      html += `<div id="sourceFormContainer"></div>`;
+    }
+
+    if (!sources.length) {
+      html += `<div class="empty">${t('noSources')}</div>`;
+    } else {
+      html += '<div class="digest-list">';
+      for (const s of sources) {
+        const icon = SOURCE_ICONS[s.type] || '📦';
+        const lastFetch = s.last_fetched_at ? s.last_fetched_at.slice(0, 16).replace('T', ' ') : t('never');
+        html += `<div class="source-card">
+          <div class="source-header">
+            <span class="source-name">${icon} ${s.name}${s.is_public ? ' <span style="font-size:11px;color:#666;font-weight:400;">🌐</span>' : ''}</span>
+            <div class="source-actions">
+              ${isAdmin ? `<label class="toggle-switch" title="Active"><input type="checkbox" ${s.is_active ? 'checked' : ''} onchange="toggleSource(${s.id}, this.checked)"><span class="toggle-slider"></span></label>
+              <button onclick="editSourceForm(${s.id})">${t('editSource')}</button>
+              <button class="danger" onclick="delSource(${s.id})">${t('deleteSource')}</button>` : ''}
+            </div>
+          </div>
+          <div class="source-meta">
+            <span>${s.type}</span>
+            <span>${t('lastFetched')}: ${lastFetch}</span>
+            <span>${t('fetchCount')}: ${s.fetch_count}</span>
+          </div>
+        </div>`;
+      }
+      html += '</div>';
+    }
+    list.innerHTML = html;
+    if (showSourceForm) renderSourceForm();
+  } catch (e) {
+    list.innerHTML = `<div class="empty">Failed: ${e.message}</div>`;
+  }
+}
+
+function toggleSourceForm() {
+  showSourceForm = !showSourceForm;
+  editingSource = null;
+  renderSourceForm();
+}
+
+async function editSourceForm(id) {
+  try {
+    const r = await fetch(`${API}/sources/${id}`, { credentials: 'same-origin' });
+    editingSource = await r.json();
+    showSourceForm = true;
+    renderSourceForm();
+  } catch {}
+}
+
+function renderSourceForm() {
+  const container = document.getElementById('sourceFormContainer');
+  if (!container) return;
+  if (!showSourceForm) { container.innerHTML = ''; return; }
+  const s = editingSource;
+  const typeOptions = SOURCE_TYPES.map(t => `<option value="${t}" ${s && s.type === t ? 'selected' : ''}>${SOURCE_ICONS[t] || ''} ${t}</option>`).join('');
+  container.innerHTML = `<div class="source-form">
+    <div class="form-row"><label>${t('sourceName')}</label><input id="sf_name" value="${s ? s.name : ''}"></div>
+    <div class="form-row"><label>${t('sourceType')}</label><select id="sf_type">${typeOptions}</select></div>
+    <div class="form-row"><label>${t('sourceConfig')}</label><textarea id="sf_config">${s ? (typeof s.config === 'string' ? s.config : JSON.stringify(JSON.parse(s.config), null, 2)) : '{}'}</textarea></div>
+    <div class="form-row"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="sf_public" ${s && s.is_public ? 'checked' : ''}> ${t('sourcePublic')}</label></div>
+    <div class="form-actions">
+      <button class="primary" onclick="saveSource()">${t('save')}</button>
+      <button onclick="showSourceForm=false;editingSource=null;renderSourceForm()">${t('cancel')}</button>
+    </div>
+  </div>`;
+}
+
+async function saveSource() {
+  const name = document.getElementById('sf_name').value.trim();
+  const type = document.getElementById('sf_type').value;
+  const config = document.getElementById('sf_config').value.trim();
+  const isPublic = document.getElementById('sf_public').checked;
+  if (!name) return;
+  try { JSON.parse(config); } catch { showToast('Invalid JSON config'); return; }
+  try {
+    if (editingSource) {
+      await fetch(`${API}/sources/${editingSource.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ name, type, config, isPublic }) });
+      showToast(t('sourceUpdated'));
+    } else {
+      await fetch(`${API}/sources`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ name, type, config, isPublic }) });
+      showToast(t('sourceCreated'));
+    }
+    showSourceForm = false; editingSource = null;
+    renderSources();
+  } catch (e) { showToast('Error: ' + e.message); }
+}
+
+async function toggleSource(id, active) {
+  await fetch(`${API}/sources/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ isActive: active }) });
+}
+
+async function delSource(id) {
+  if (!confirm(t('confirmDelete'))) return;
+  await fetch(`${API}/sources/${id}`, { method: 'DELETE', credentials: 'same-origin' });
+  showToast(t('sourceDeleted'));
+  renderSources();
+}
+
 async function loadMarkedUrls() {
   if (!currentUser) return;
   try {
@@ -624,7 +789,7 @@ document.querySelectorAll('.tab').forEach(tab => {
 
 if (location.hash) {
   const h = location.hash.substring(1);
-  if (['4h','daily','weekly','monthly','marks'].includes(h)) {
+  if (['4h','daily','weekly','monthly','marks','sources'].includes(h)) {
     currentType = h;
     document.querySelector('.tab.active').classList.remove('active');
     const t = document.querySelector('.tab[data-type="'+h+'"]');

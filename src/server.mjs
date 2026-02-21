@@ -4,7 +4,7 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { randomBytes } from 'crypto';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, migrateMarksToUser } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, migrateMarksToUser, listSources, getSource, createSource, updateSource, deleteSource } from './db.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -283,6 +283,48 @@ const server = createServer(async (req, res) => {
         target: m.url, at: m.created_at, title: m.title || '',
       }));
       return json(res, { tweets: marks.filter(m => m.status === 'pending').map(m => ({ url: m.url, markedAt: m.created_at })), history });
+    }
+
+    // ── Sources endpoints ──
+
+    if (req.method === 'GET' && path === '/api/sources') {
+      if (req.user && req.user.is_admin) {
+        return json(res, listSources(db));
+      } else if (req.user) {
+        return json(res, listSources(db, { userId: req.user.id, includePublic: true }));
+      } else {
+        return json(res, listSources(db, { includePublic: true }));
+      }
+    }
+
+    const sourceMatch = path.match(/^\/api\/sources\/(\d+)$/);
+    if (req.method === 'GET' && sourceMatch) {
+      const s = getSource(db, parseInt(sourceMatch[1]));
+      if (!s) return json(res, { error: 'not found' }, 404);
+      if (!s.is_public && (!req.user || (!req.user.is_admin && s.created_by !== req.user.id))) {
+        return json(res, { error: 'not found' }, 404);
+      }
+      return json(res, s);
+    }
+
+    if (req.method === 'POST' && path === '/api/sources') {
+      if (!req.user || !req.user.is_admin) return json(res, { error: 'admin required' }, 403);
+      const body = await parseBody(req);
+      const result = createSource(db, { ...body, createdBy: req.user.id });
+      return json(res, result, 201);
+    }
+
+    if (req.method === 'PUT' && sourceMatch) {
+      if (!req.user || !req.user.is_admin) return json(res, { error: 'admin required' }, 403);
+      const body = await parseBody(req);
+      updateSource(db, parseInt(sourceMatch[1]), body);
+      return json(res, { ok: true });
+    }
+
+    if (req.method === 'DELETE' && sourceMatch) {
+      if (!req.user || !req.user.is_admin) return json(res, { error: 'admin required' }, 403);
+      deleteSource(db, parseInt(sourceMatch[1]));
+      return json(res, { ok: true });
     }
 
     // ── Config endpoints ──

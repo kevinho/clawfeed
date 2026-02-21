@@ -43,6 +43,13 @@ export function getDb(dbPath) {
   } catch (e) {
     if (!e.message.includes('duplicate column')) console.error('Migration 002:', e.message);
   }
+  // Run sources migration (idempotent)
+  try {
+    const sql3 = readFileSync(join(ROOT, 'migrations', '003_sources.sql'), 'utf8');
+    _db.exec(sql3);
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.error('Migration 003:', e.message);
+  }
   return _db;
 }
 
@@ -132,6 +139,59 @@ export function getSession(db, sessionId) {
 
 export function deleteSession(db, sessionId) {
   db.prepare('DELETE FROM sessions WHERE id = ?').run(sessionId);
+}
+
+// ── Sources ──
+
+export function listSources(db, { activeOnly, userId, includePublic } = {}) {
+  let sql = 'SELECT * FROM sources';
+  const conditions = [];
+  const params = [];
+  if (activeOnly) { conditions.push('is_active = 1'); }
+  if (userId && includePublic) {
+    conditions.push('(created_by = ? OR is_public = 1)');
+    params.push(userId);
+  } else if (userId) {
+    conditions.push('created_by = ?');
+    params.push(userId);
+  } else if (includePublic) {
+    conditions.push('is_public = 1');
+  }
+  if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+  sql += ' ORDER BY created_at DESC';
+  return db.prepare(sql).all(...params);
+}
+
+export function getSource(db, id) {
+  return db.prepare('SELECT * FROM sources WHERE id = ?').get(id);
+}
+
+export function createSource(db, { name, type, config = '{}', isPublic = 0, createdBy }) {
+  const result = db.prepare(
+    'INSERT INTO sources (name, type, config, is_public, created_by) VALUES (?, ?, ?, ?, ?)'
+  ).run(name, type, config, isPublic ? 1 : 0, createdBy);
+  return { id: result.lastInsertRowid };
+}
+
+export function updateSource(db, id, patch) {
+  const allowed = ['name', 'type', 'config', 'is_active', 'is_public'];
+  const sets = [];
+  const params = [];
+  for (const [k, v] of Object.entries(patch)) {
+    const col = k === 'isActive' ? 'is_active' : k === 'isPublic' ? 'is_public' : k;
+    if (allowed.includes(col)) {
+      sets.push(`${col} = ?`);
+      params.push(typeof v === 'boolean' ? (v ? 1 : 0) : v);
+    }
+  }
+  if (!sets.length) return { changes: 0 };
+  sets.push("updated_at = datetime('now')");
+  params.push(id);
+  return db.prepare(`UPDATE sources SET ${sets.join(', ')} WHERE id = ?`).run(...params);
+}
+
+export function deleteSource(db, id) {
+  return db.prepare('DELETE FROM sources WHERE id = ?').run(id);
 }
 
 // ── Config ──
