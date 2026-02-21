@@ -127,7 +127,7 @@ export function createSession(db, { id, userId, expiresAt }) {
 
 export function getSession(db, sessionId) {
   return db.prepare(`
-    SELECT s.*, u.id as uid, u.google_id, u.email, u.name, u.avatar, u.is_admin
+    SELECT s.*, u.id as uid, u.google_id, u.email, u.name, u.avatar
     FROM sessions s JOIN users u ON s.user_id = u.id
     WHERE s.id = ? AND s.expires_at > datetime('now')
   `).get(sessionId);

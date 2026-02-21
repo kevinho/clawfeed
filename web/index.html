@@ -629,7 +629,6 @@ async function renderSources() {
   try {
     const resp = await fetch(`${API}/sources`, { credentials: 'same-origin' });
     const sources = await resp.json();
-    const isAdmin = currentUser && currentUser.is_admin;
     const isLoggedIn = !!currentUser;
     const active = sources.filter(s => s.is_active);
     const types = [...new Set(sources.map(s => s.type))];
@@ -722,7 +721,7 @@ function renderSourceForm() {
     <div class="form-row"><label>${t('sourceName')}</label><input id="sf_name" value="${s ? s.name : ''}" placeholder="e.g. AI Twitter Feed"></div>
     <div class="form-row"><label>${t('sourceType')}</label><select id="sf_type" onchange="onTypeChange()">${typeOptions}</select></div>
     <div class="form-row"><label>${t('sourceConfig')}</label><textarea id="sf_config" style="font-family:monospace;font-size:12px;min-height:100px;">${configVal}</textarea></div>
-    <div class="form-row"><label style="display:flex;align-items:center;gap:8px;"><input type="checkbox" id="sf_public" ${s && s.is_public ? 'checked' : ''}> ${t('sourcePublic')}</label></div>
+    <div class="form-row" style="flex-direction:row;align-items:center;gap:10px;"><label style="cursor:pointer;display:flex;align-items:center;gap:6px;margin:0;"><input type="checkbox" id="sf_public" style="width:16px;height:16px;" ${s && s.is_public ? 'checked' : ''}> ${t('sourcePublic')}</label></div>
     <div class="form-actions">
       <button class="primary" onclick="saveSource()">${t('save')}</button>
       <button onclick="showSourceForm=false;editingSource=null;renderSourceForm()">${t('cancel')}</button>
