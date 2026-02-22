@@ -29,7 +29,6 @@ Configure in `.env` file:
 | `GOOGLE_CLIENT_ID` | OAuth client ID (optional) | - |
 | `GOOGLE_CLIENT_SECRET` | OAuth secret (optional) | - |
 | `SESSION_SECRET` | Session encryption key | - |
-| `ADMIN_EMAILS` | Admin emails (comma-separated) | - |
 
 ## API Server
 

@@ -78,7 +78,6 @@ Create a `.env` file in the project root:
 | `GOOGLE_CLIENT_ID` | Google OAuth client ID | No* | - |
 | `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | No* | - |
 | `SESSION_SECRET` | Session encryption key | No* | - |
-| `ADMIN_EMAILS` | Comma-separated admin emails | No | - |
 | `DIGEST_PORT` | Server port | No | 8767 |
 | `ALLOWED_ORIGINS` | Allowed origins for CORS | No | localhost |
 

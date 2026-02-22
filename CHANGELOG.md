@@ -16,7 +16,7 @@
 - **Smart Source Detection** — Paste any URL, auto-detect source type (RSS, Twitter, HN, Reddit, etc.)
 - **Sources Management** — ⚙️ UI to add/edit/delete data sources with type-specific config examples
 - **Auth Config API** — Hide login UI when Google OAuth not configured (for third-party deployments)
-- **API Key Auth** — `POST /api/digests` uses Bearer token instead of admin sessions
+- **API Key Auth** — `POST /api/digests` uses Bearer token authentication
 
 ### 🔧 Fixed
 - Tab switching state reset when navigating from Sources

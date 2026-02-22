@@ -5,7 +5,6 @@ CREATE TABLE IF NOT EXISTS users (
   name TEXT,
   avatar TEXT,
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
-  is_admin INTEGER DEFAULT 0
 );
 
 CREATE TABLE IF NOT EXISTS sessions (

@@ -421,7 +421,7 @@ AI 编辑部会从这些源中为你精选内容。
 ### 认证要求
 
 - `/api/subscriptions/*` — 需要登录
-- `/api/raw-items/*` — 需要登录 + admin（调试用）
+- `/api/raw-items/*` — 需要登录（调试用）
 - 其他现有 API 行为不变，新增 user_id 感知
 
 ## 9. Scale 分析
