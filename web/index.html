@@ -531,7 +531,7 @@ async function doLogout() {
 
 function WEEKDAYS() { return t('weekdays'); }
 let currentType = '4h';
-let markedUrls = new Set();
+let markedUrls = new Map(); // url → mark id
 const PAGE_SIZE = 10;
 let currentOffset = 0;
 let allLoaded = false;
@@ -738,9 +738,12 @@ async function loadDigest(id) {
     text = text.replace(/(https?:\/\/x\.com\/[^\s<)]+)/g, (match) => {
       const clean = match.split('?')[0];
       const isMarked = markedUrls.has(clean);
+      const markId = markedUrls.get(clean);
       let markHtml;
       if (currentUser) {
-        markHtml = `<span class="mark-btn ${isMarked ? 'marked' : ''}" onclick="doMark('${clean}', this)">${isMarked ? t('marked') : t('mark')}</span>`;
+        markHtml = isMarked
+          ? `<span class="mark-btn marked" onclick="doUnmark('${clean}', ${markId}, this)">${t('marked')}</span>`
+          : `<span class="mark-btn" onclick="doMark('${clean}', this)">${t('mark')}</span>`;
       } else {
         markHtml = `<span class="mark-btn disabled" onclick="showToast('${t('loginToMark')}')" title="${t('loginToMark')}">${t('mark')}</span>`;
       }
@@ -848,7 +851,10 @@ function renderMarkCard(m) {
     ${summary ? `<div style="font-size:13px;color:#bbb;margin:6px 0;line-height:1.5;">${summary}</div>` : ''}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px;">
       <a href="${m.url}" target="_blank" style="font-size:12px;color:#555;text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:70%;">${m.url.replace('https://x.com/','x.com/')}</a>
-      <span style="font-size:11px;color:#555;background:#1a1a1a;padding:1px 6px;border-radius:3px;border:1px solid #282828;">${topic}</span>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <span style="font-size:11px;color:#555;background:#1a1a1a;padding:1px 6px;border-radius:3px;border:1px solid #282828;">${topic}</span>
+        <span class="mark-btn" onclick="doUnmark('${m.url}', ${m.id}, this)" style="font-size:11px;color:#e55;border-color:#e55;">✕</span>
+      </div>
     </div>
   </div>`;
 }
@@ -1265,7 +1271,7 @@ async function loadMarkedUrls() {
     const r = await fetch(`${API}/marks`, { credentials: 'same-origin' });
     if (r.ok) {
       const marks = await r.json();
-      marks.forEach(m => markedUrls.add(m.url));
+      marks.forEach(m => markedUrls.set(m.url, m.id));
     }
   } catch {}
 }
@@ -1285,13 +1291,32 @@ async function doMark(url, btn) {
     });
     const d = await r.json();
     if (d.ok) {
-      markedUrls.add(url);
+      // Reload marks to get the new mark id
+      const mr = await fetch(`${API}/marks`, { credentials: 'same-origin' });
+      if (mr.ok) { const marks = await mr.json(); markedUrls.clear(); marks.forEach(m => markedUrls.set(m.url, m.id)); }
+      const newId = markedUrls.get(url);
       btn.textContent = t('marked');
       btn.classList.add('marked');
-      btn.onclick = null;
+      btn.onclick = () => doUnmark(url, newId, btn);
       showToast(d.duplicate ? t('markDup') : t('markSuccess'));
     }
   } catch (e) { showToast(t('markFail') + ': ' + e.message); }
+}
+
+async function doUnmark(url, markId, btn) {
+  if (!confirm(lang === 'zh' ? '确定取消收藏？' : 'Remove this mark?')) return;
+  try {
+    const r = await fetch(`${API}/marks/${markId}`, { method: 'DELETE', credentials: 'same-origin' });
+    const d = await r.json();
+    if (d.ok) {
+      markedUrls.delete(url);
+      btn.textContent = t('mark');
+      btn.classList.remove('marked');
+      btn.onclick = () => doMark(url, btn);
+      showToast(lang === 'zh' ? '已取消收藏' : 'Unmarked');
+      if (currentType === 'marks') renderMarks();
+    }
+  } catch (e) { showToast('❌ ' + e.message); }
 }
 
 // ── Source Packs ──
