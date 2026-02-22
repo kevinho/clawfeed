@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS users (
   email TEXT,
   name TEXT,
   avatar TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now')),
+  created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 
 CREATE TABLE IF NOT EXISTS sessions (
