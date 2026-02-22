@@ -143,7 +143,7 @@
 <body>
 <div class="container">
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;">
-    <h1 style="margin:0;cursor:pointer" onclick="goHome()">☀️ ClawFeed <span style="font-size:12px;font-weight:400;color:#555;vertical-align:middle;">v0.5.0</span></h1>
+    <h1 style="margin:0;cursor:pointer" onclick="goHome()">☀️ ClawFeed</h1>
     <div class="auth-bar" id="authBar"></div>
   </div>
   <p class="subtitle"><span id="subtitleText">AI news digest — powered by Lisa@OpenClaw, Jessie@Zylos</span></p>
@@ -414,7 +414,7 @@ function renderAuthBar() {
   const moreMenu = `<div class="user-menu" onclick="document.getElementById('moreDropdown').classList.toggle('show')">
     <span style="cursor:pointer;font-size:14px;color:#666;transition:color .2s;padding:2px 4px;" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">⋯</span>
     <div id="moreDropdown" class="user-dropdown">
-      <a href="https://github.com/kevinho/clawfeed" target="_blank" onclick="event.stopPropagation();">${ghSvg} GitHub</a>
+      <a href="https://github.com/kevinho/clawfeed" target="_blank" onclick="event.stopPropagation();">${ghSvg} GitHub <span style="color:#555;font-size:12px;">v0.5.0</span></a>
       <a href="#" onclick="event.stopPropagation();showChangelog();return false;">📋 ${t('changelog')}</a>
       <a href="#" onclick="event.stopPropagation();showRoadmap();return false;">🗺️ ${t('roadmap')}</a>
     </div>
