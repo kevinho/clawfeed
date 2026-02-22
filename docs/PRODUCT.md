@@ -1,4 +1,4 @@
-# AI Digest — 产品设计文档
+# ClawFeed — 产品设计文档
 
 > AI 信息 digest 开源工具。可作为 ClawHub Skill 安装，也可独立部署。
 
@@ -6,7 +6,7 @@
 开源 AI 信息摘要工具，帮助用户从 Twitter/RSS 等信息源自动生成结构化简报。
 
 ## 分发方式
-- **ClawHub Skill** — `openclaw skill install ai-digest`
+- **ClawHub Skill** — `openclaw skill install clawfeed`
 - **独立部署** — clone repo 自己跑
 
 ---
@@ -48,7 +48,7 @@
 - 自定义接收渠道（Telegram/Discord/Email）
 - 自定义 curation rules
 - 本地数据，无需登录
-- 安装：`openclaw skill install ai-digest` 或 git clone
+- 安装：`openclaw skill install clawfeed` 或 git clone
 
 ### 公开服务版（Hosted）
 - 域名：`digest.lenspal.ai`（或类似）
@@ -95,7 +95,7 @@
 ### Skill 结构（ClawHub）
 
 ```
-ai-digest/
+clawfeed/
 ├── SKILL.md              # Skill 入口文档
 ├── package.json
 ├── src/
@@ -121,7 +121,7 @@ ai-digest/
 ## 实施路线
 
 ### Phase 1: 重构现有代码 → 开源 repo
-- [ ] 创建 `ai-digest` repo
+- [ ] 创建 `clawfeed` repo
 - [ ] 抽取 dashboard 前端（现有 index.html → SPA）
 - [ ] 抽取 digest 生成逻辑（从 cron job prompt 中提取）
 - [ ] 抽取 curation rules 为模板

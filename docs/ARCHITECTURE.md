@@ -1,6 +1,6 @@
-# AI Digest 多租户架构设计
+# ClawFeed 多租户架构设计
 
-> AI Digest 从个人工具升级为公开 SaaS 服务的架构设计文档。
+> ClawFeed 从个人工具升级为公开 SaaS 服务的架构设计文档。
 
 ## 1. 产品理念
 
@@ -334,7 +334,7 @@ AI 编辑部会从这些源中为你精选内容。
 ### 板块结构
 
 ```
-📰 AI Digest — 2026-02-22 Daily
+📰 ClawFeed — 2026-02-22 Daily
 
 🐦 Twitter 精选 (5)
   · @karpathy: LLM 推理优化新思路...  [via: AI Twitter]

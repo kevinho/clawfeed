@@ -1,4 +1,4 @@
-# AI Digest — Test Suite
+# ClawFeed — Test Suite
 
 ## Index
 

@@ -120,7 +120,7 @@ function _digestTitle(d, ca) {
   const timeStr = dt.toLocaleString('en-SG', { timeZone: 'Asia/Singapore', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false });
   const icons = { '4h': '☀️', daily: '📰', weekly: '📅', monthly: '📊' };
   const labels = { '4h': 'AI 简报', daily: 'AI 日报', weekly: 'AI 周报', monthly: 'AI 月报' };
-  return `${icons[d.type] || '📝'} ${labels[d.type] || 'AI Digest'} | ${timeStr} SGT`;
+  return `${icons[d.type] || '📝'} ${labels[d.type] || 'ClawFeed'} | ${timeStr} SGT`;
 }
 
 // ── Source URL resolver ──
@@ -252,7 +252,7 @@ const server = createServer(async (req, res) => {
       // JSON Feed 1.1
       const feed = {
         version: 'https://jsonfeed.org/version/1.1',
-        title: `${user.name}'s AI Digest`,
+        title: `${user.name}'s ClawFeed`,
         home_page_url: BASE,
         feed_url: `${BASE}/feed/${slug}.json`,
         items: digests.map(d => {
@@ -283,7 +283,7 @@ const server = createServer(async (req, res) => {
         const title = _digestTitle(d, ca);
         items += `<item><title>${escXml(title)}</title><link>${BASE}/#digest-${d.id}</link><guid isPermaLink="false">${d.id}</guid><pubDate>${dt.toUTCString()}</pubDate><description>${escXml(d.content.slice(0, 2000))}</description></item>\n`;
       }
-      const rss = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>${escXml(user.name)}'s AI Digest</title><link>${BASE}</link><description>AI Digest Feed</description>\n${items}</channel></rss>`;
+      const rss = `<?xml version="1.0" encoding="UTF-8"?>\n<rss version="2.0"><channel><title>${escXml(user.name)}'s ClawFeed</title><link>${BASE}</link><description>ClawFeed Feed</description>\n${items}</channel></rss>`;
       res.writeHead(200, { 'Content-Type': 'application/rss+xml; charset=utf-8' });
       res.end(rss);
       return;
@@ -691,5 +691,5 @@ const server = createServer(async (req, res) => {
 });
 
 server.listen(PORT, '127.0.0.1', () => {
-  console.log(`🚀 AI Digest API running on http://127.0.0.1:${PORT}`);
+  console.log(`🚀 ClawFeed API running on http://127.0.0.1:${PORT}`);
 });

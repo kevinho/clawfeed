@@ -1,6 +1,6 @@
 #!/bin/bash
 # ═══════════════════════════════════════════════════
-#  AI Digest — Full E2E Multi-User Test Suite
+#  ClawFeed — Full E2E Multi-User Test Suite
 #  4 test users: Alice, Bob, Carol, Dave
 #  Tests: auth, sources, packs, marks, subscriptions,
 #         data isolation, ownership, feeds, security
@@ -60,7 +60,7 @@ jq_len() { python3 -c "import sys,json; print(len(json.load(sys.stdin)))" 2>/dev
 
 echo ""
 echo "═══════════════════════════════════════════"
-echo "  AI Digest E2E Test Suite"
+echo "  ClawFeed E2E Test Suite"
 echo "  $(date '+%Y-%m-%d %H:%M:%S')"
 echo "═══════════════════════════════════════════"
 
