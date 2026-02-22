@@ -1,0 +1,63 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>ClawFeed Demo — CTA</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px;
+    background: #0a0a0a;
+    font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 32px;
+  }
+  .logo {
+    font-size: 72px;
+    font-weight: 800;
+    opacity: 0;
+    animation: fadeIn 1s ease 0.3s forwards;
+  }
+  .logo .icon { font-size: 64px; }
+  .url {
+    font-size: 36px;
+    color: #888;
+    opacity: 0;
+    animation: fadeIn 0.8s ease 1s forwards;
+    letter-spacing: 2px;
+  }
+  .tagline {
+    font-size: 44px;
+    font-weight: 600;
+    margin-top: 32px;
+    opacity: 0;
+    animation: fadeIn 0.8s ease 1.8s forwards;
+    background: linear-gradient(135deg, #f0c040, #ff8844);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+  }
+  .credits {
+    font-size: 20px;
+    color: #555;
+    margin-top: 48px;
+    opacity: 0;
+    animation: fadeIn 0.6s ease 2.5s forwards;
+  }
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+</style>
+</head>
+<body>
+<div class="logo"><span class="icon">☀️</span> ClawFeed</div>
+<div class="url">clawfeed.kevinhe.io</div>
+<div class="tagline">Stop scrolling. Start knowing.</div>
+<div class="credits">From openclaw.ai 🐾 & zylos.ai 🐙</div>
+</body>
+</html>

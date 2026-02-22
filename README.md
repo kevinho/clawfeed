@@ -1,10 +1,18 @@
 # ClawFeed
 
-> **Live Demo**: [clawfeed.kevinhe.io](https://clawfeed.kevinhe.io)
+> **Stop scrolling. Start knowing.**
+
+<div align="center">
+
+https://github.com/user-attachments/assets/demo.mp4
+
+[▶ Watch Demo (30s)](docs/demo.mp4) · [Live Demo](https://clawfeed.kevinhe.io)
+
+</div>
+
+AI-powered news digest tool that curates 5,000 accounts down to 10 highlights that matter. Generates structured summaries from Twitter/RSS feeds. Works as a standalone service or as an [OpenClaw](https://github.com/openclaw/openclaw) / [Zylos](https://github.com/zylos-ai) skill.
 
 ![Dashboard](docs/screenshot.png)
-
-AI-powered news digest tool that generates structured summaries from Twitter/RSS feeds. Works as a standalone service or as an [OpenClaw](https://github.com/openclaw/openclaw) / [Zylos](https://github.com/zylos-ai) skill.
 
 ## Features
 

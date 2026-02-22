@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>ClawFeed — Deep Dive Mock</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px;
+    background: #0d0d0d;
+    font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
+    color: #e0e0e0;
+    overflow: hidden;
+    padding: 60px 120px;
+  }
+  .header {
+    display: flex; align-items: center; gap: 16px;
+    margin-bottom: 40px;
+  }
+  .header .logo { font-size: 28px; font-weight: 700; }
+  .header .nav { display: flex; gap: 16px; margin-left: 40px; }
+  .header .nav span {
+    padding: 8px 20px; border-radius: 20px; font-size: 15px;
+    color: #888; cursor: pointer;
+  }
+  .header .nav span.active {
+    background: #222; color: #fff; border: 1px solid #333;
+  }
+  .breadcrumb { color: #666; font-size: 14px; margin-bottom: 24px; }
+  .breadcrumb a { color: #6aa3ff; text-decoration: none; }
+  .card {
+    background: #161616;
+    border: 1px solid #222;
+    border-radius: 16px;
+    padding: 40px 48px;
+    max-width: 1200px;
+  }
+  .mark-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    background: rgba(255,140,0,0.15); color: #ff9933;
+    padding: 4px 12px; border-radius: 8px; font-size: 13px;
+    margin-bottom: 16px;
+  }
+  .tweet-ref {
+    color: #6aa3ff; font-size: 15px; margin-bottom: 8px;
+  }
+  .tweet-author {
+    font-size: 20px; font-weight: 600; color: #fff; margin-bottom: 8px;
+  }
+  .tweet-text {
+    font-size: 16px; color: #aaa; line-height: 1.6; margin-bottom: 28px;
+  }
+  .divider { border-top: 1px solid #222; margin: 24px 0; }
+  .section-title {
+    font-size: 18px; font-weight: 700; color: #f0c040; margin-bottom: 16px;
+  }
+  .dive-content {
+    font-size: 15px; line-height: 1.8; color: #ccc;
+  }
+  .dive-content strong { color: #fff; }
+  .dive-content .highlight {
+    background: rgba(240,192,64,0.1);
+    padding: 2px 6px; border-radius: 4px;
+  }
+  ul { padding-left: 24px; }
+  li { margin-bottom: 8px; }
+  .lisa-take {
+    background: rgba(100,160,255,0.08);
+    border-left: 3px solid #6aa3ff;
+    padding: 16px 20px;
+    border-radius: 0 8px 8px 0;
+    margin-top: 20px;
+    font-size: 15px;
+    color: #aac8ff;
+  }
+  .lisa-take .label { font-weight: 700; color: #6aa3ff; }
+</style>
+</head>
+<body>
+<div class="header">
+  <div class="logo">☀️ ClawFeed</div>
+  <div class="nav">
+    <span>4H Briefs</span>
+    <span>Daily</span>
+    <span>Weekly</span>
+    <span>Monthly</span>
+    <span class="active">📌 Marks</span>
+  </div>
+</div>
+
+<div class="breadcrumb">
+  <a href="#">← Back to Marks</a> &nbsp;·&nbsp; Deep Dive Result
+</div>
+
+<div class="card">
+  <div class="mark-badge">📌 Marked · 2026-02-17 12:37</div>
+  <div class="tweet-ref">@benln · x.com/benln/status/2023102711210852849</div>
+  <div class="tweet-author">Ben Lang — a16z + YC 2026 创业方向清单</div>
+  <div class="tweet-text">
+    147K views · 2.3K bookmarks — 整理了 a16z 和 YC 2026 年想投资的创业方向
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-title">🔍 AI Deep Dive</div>
+  <div class="dive-content">
+    <strong>YC Spring 2026 RFS — 7 大方向：</strong>
+    <ul>
+      <li><span class="highlight">Cursor for Product Managers</span> — PM 领域的 AI 原生工具</li>
+      <li><span class="highlight">AI-Native Hedge Funds</span> — AI 原生对冲基金</li>
+      <li><span class="highlight">AI-Native Agencies</span> — AI 原生代理机构</li>
+      <li><span class="highlight">Stablecoin Financial Services</span> — 稳定币金融服务</li>
+      <li>AI for Government · Modern Metal Mills · AI Guidance</li>
+    </ul>
+
+    <p style="margin-top: 16px"><strong>评论区精华：</strong></p>
+    <ul>
+      <li>@clwdbot: "这些清单上的每个 idea 都已经有 portfolio company 领先你 6 个月了。"</li>
+      <li>@nnnniiiiikkkk: "真正的机会在清单之下一层 — 支撑这些 idea 的无聊基础设施。"</li>
+    </ul>
+
+    <div class="lisa-take">
+      <span class="label">Lisa 的观点：</span>
+      对你来说，AI × crypto 交叉点（stablecoin financial services + AI-native hedge funds）最值得关注。这两个方向恰好是你的专业领域交集。另外 "boring infrastructure" 的观点很有洞察力。
+    </div>
+  </div>
+</div>
+</body>
+</html>

@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>ClawFeed Demo — Hook Counter</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px;
+    background: #0a0a0a;
+    font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+  }
+  .counter {
+    font-size: 160px;
+    font-weight: 800;
+    letter-spacing: -4px;
+    color: #ff4444;
+    text-shadow: 0 0 60px rgba(255,68,68,0.4);
+    transition: all 0.05s;
+    font-variant-numeric: tabular-nums;
+  }
+  .label {
+    font-size: 32px;
+    color: #666;
+    margin-top: 16px;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+  }
+  .ticker-bg {
+    position: absolute;
+    top: 0; left: 0; right: 0; bottom: 0;
+    opacity: 0.06;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #fff;
+    overflow: hidden;
+    padding: 20px;
+    word-break: break-all;
+  }
+  .subtitle {
+    font-size: 42px;
+    color: #999;
+    margin-top: 40px;
+    opacity: 0;
+    animation: fadeIn 0.8s ease 4s forwards;
+  }
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+  @keyframes shake {
+    0%, 100% { transform: translateX(0); }
+    25% { transform: translateX(-2px); }
+    75% { transform: translateX(2px); }
+  }
+</style>
+</head>
+<body>
+<div class="ticker-bg" id="ticker"></div>
+<div class="counter" id="counter">0</div>
+<div class="label">tweets in your feed today</div>
+<div class="subtitle">"2 hours scrolling. Still missing what matters."</div>
+
+<script>
+// Generate background noise text
+const noise = [];
+const words = ['AI','crypto','breaking','thread','🔥','gm','alpha','bullish','bearish','new drop','mint','airdrop','deploy','launch','update','bug fix','PR merged','v2','roadmap','tokenomics','yield','APY','TVL','hack','exploit','patch','release','model','benchmark','finetune','inference','GPU','training','dataset','paper','arxiv','demo','API','SDK','CLI','agent','tool','MCP','Claude','GPT','Gemini','open source'];
+for (let i = 0; i < 3000; i++) {
+  noise.push(words[Math.floor(Math.random() * words.length)]);
+}
+document.getElementById('ticker').textContent = noise.join(' · ');
+
+// Animate counter
+const el = document.getElementById('counter');
+const targets = [
+  { value: 500, duration: 800 },
+  { value: 1000, duration: 600 },
+  { value: 2000, duration: 500 },
+  { value: 3000, duration: 400 },
+  { value: 5000, duration: 800 },
+];
+
+let current = 0;
+let step = 0;
+
+function animateStep() {
+  if (step >= targets.length) return;
+  const target = targets[step];
+  const start = current;
+  const diff = target.value - start;
+  const startTime = performance.now();
+
+  function tick(now) {
+    const elapsed = now - startTime;
+    const progress = Math.min(elapsed / target.duration, 1);
+    const eased = 1 - Math.pow(1 - progress, 3);
+    current = Math.round(start + diff * eased);
+    el.textContent = current.toLocaleString();
+
+    // Shake effect
+    if (progress < 1) {
+      el.style.animation = 'shake 0.05s linear';
+      requestAnimationFrame(tick);
+    } else {
+      el.style.animation = 'none';
+      step++;
+      setTimeout(animateStep, step < targets.length ? 200 : 0);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+// Scroll ticker background
+const tickerEl = document.getElementById('ticker');
+let scrollPos = 0;
+function scrollTicker() {
+  scrollPos += 1.5;
+  tickerEl.style.transform = `translateY(-${scrollPos}px)`;
+  if (scrollPos < 2000) requestAnimationFrame(scrollTicker);
+}
+
+setTimeout(() => {
+  animateStep();
+  scrollTicker();
+}, 500);
+</script>
+</body>
+</html>

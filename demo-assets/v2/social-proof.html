@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>ClawFeed Demo — Social Proof</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px;
+    background: #0a0a0a;
+    font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .stats {
+    display: flex;
+    flex-direction: column;
+    gap: 48px;
+    align-items: center;
+  }
+  .stat {
+    display: flex;
+    align-items: baseline;
+    gap: 20px;
+    opacity: 0;
+  }
+  .stat:nth-child(1) { animation: fadeUp 0.7s ease 0.3s forwards; }
+  .stat:nth-child(2) { animation: fadeUp 0.7s ease 0.9s forwards; }
+  .stat:nth-child(3) { animation: fadeUp 0.7s ease 1.5s forwards; }
+  .stat:nth-child(4) { animation: fadeUp 0.7s ease 2.1s forwards; }
+  .num {
+    font-size: 80px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+    background: linear-gradient(135deg, #f0c040, #ff8844);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    min-width: 200px;
+    text-align: right;
+  }
+  .desc {
+    font-size: 32px;
+    color: #888;
+    font-weight: 400;
+  }
+  @keyframes fadeUp {
+    from { opacity: 0; transform: translateY(30px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+</style>
+</head>
+<body>
+<div class="stats">
+  <div class="stat">
+    <span class="num">10</span>
+    <span class="desc">days running</span>
+  </div>
+  <div class="stat">
+    <span class="num">572</span>
+    <span class="desc">tweets curated</span>
+  </div>
+  <div class="stat">
+    <span class="num">54</span>
+    <span class="desc">structured briefs</span>
+  </div>
+  <div class="stat">
+    <span class="num">5 min</span>
+    <span class="desc">per day to stay informed</span>
+  </div>
+</div>
+</body>
+</html>

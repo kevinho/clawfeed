@@ -1,0 +1,123 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1920, height=1080">
+<title>ClawFeed Demo — Data Compare</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    width: 1920px; height: 1080px;
+    background: #0a0a0a;
+    font-family: -apple-system, 'SF Pro Display', 'Inter', sans-serif;
+    color: #fff;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .compare {
+    display: flex;
+    gap: 120px;
+    align-items: center;
+  }
+  .side {
+    text-align: center;
+    opacity: 0;
+  }
+  .side.left { animation: slideInLeft 0.8s ease 0.5s forwards; }
+  .side.right { animation: slideInRight 0.8s ease 1.5s forwards; }
+  .number {
+    font-size: 96px;
+    font-weight: 800;
+    font-variant-numeric: tabular-nums;
+  }
+  .left .number { color: #ff4444; }
+  .right .number { color: #44ff88; }
+  .desc {
+    font-size: 28px;
+    color: #888;
+    margin-top: 12px;
+  }
+  .vs {
+    font-size: 48px;
+    color: #333;
+    opacity: 0;
+    animation: fadeIn 0.5s ease 1.2s forwards;
+  }
+  .tagline {
+    position: absolute;
+    bottom: 180px;
+    font-size: 36px;
+    color: #ccc;
+    opacity: 0;
+    animation: fadeIn 0.8s ease 2.5s forwards;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 80px;
+    margin: 24px 0;
+    opacity: 0;
+  }
+  .row:nth-child(1) { animation: fadeIn 0.6s ease 0.5s forwards; }
+  .row:nth-child(2) { animation: fadeIn 0.6s ease 1.2s forwards; }
+  .item {
+    font-size: 40px;
+    font-weight: 600;
+    min-width: 380px;
+    text-align: center;
+    padding: 24px 40px;
+    border-radius: 16px;
+  }
+  .bad {
+    background: rgba(255,68,68,0.1);
+    border: 1px solid rgba(255,68,68,0.3);
+    color: #ff6666;
+  }
+  .bad::before { content: '❌ '; }
+  .good {
+    background: rgba(68,255,136,0.1);
+    border: 1px solid rgba(68,255,136,0.3);
+    color: #44ff88;
+  }
+  .good::before { content: '✅ '; }
+  .arrow {
+    font-size: 36px;
+    color: #444;
+  }
+
+  @keyframes slideInLeft {
+    from { opacity: 0; transform: translateX(-60px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes slideInRight {
+    from { opacity: 0; transform: translateX(60px); }
+    to { opacity: 1; transform: translateX(0); }
+  }
+  @keyframes fadeIn {
+    to { opacity: 1; }
+  }
+  .container {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+</style>
+</head>
+<body>
+<div class="container">
+  <div class="row">
+    <div class="item bad">5,000 tweets/day</div>
+    <div class="arrow">→</div>
+    <div class="item good">30 curated / 5 min</div>
+  </div>
+  <div class="row">
+    <div class="item bad">2 hours scrolling</div>
+    <div class="arrow">→</div>
+    <div class="item good">Clarity in minutes</div>
+  </div>
+</div>
+<div class="tagline">AI reads everything. You read what matters.</div>
+</body>
+</html>
