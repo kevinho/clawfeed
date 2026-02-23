@@ -391,8 +391,8 @@ const server = createServer(async (req, res) => {
     });
   }
 
-  // SPA route: /pack/:slug serves frontend HTML
-  if (req.method === 'GET' && path.startsWith('/pack/')) {
+  // SPA route: / and /pack/:slug serve frontend HTML
+  if (req.method === 'GET' && (path === '/' || path.startsWith('/pack/'))) {
     try {
       const html = readFileSync(join(ROOT, 'web', 'index.html'), 'utf8');
       res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
