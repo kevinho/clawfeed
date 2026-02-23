@@ -7,7 +7,9 @@
     "start": "node src/server.mjs",
     "dev": "node --watch src/server.mjs",
     "lint": "eslint src/",
-    "test": "bash test/e2e.sh"
+    "test": "bash test/e2e.sh",
+    "collect": "node src/collector.mjs",
+    "collect:loop": "node src/collector.mjs --loop"
   },
   "devDependencies": {
     "eslint": "^9.0.0"
