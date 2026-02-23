@@ -6,7 +6,7 @@
 [![GitHub](https://img.shields.io/github/v/tag/kevinho/clawfeed?label=version)](https://github.com/kevinho/clawfeed)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
-[Live Demo: https://digest.kevinhe.io](https://digest.kevinhe.io)
+[Live Demo: https://clawfeed.kevinhe.io](https://clawfeed.kevinhe.io)
 
 AI-powered news digest that curates thousands of sources down to the highlights that matter. Generates structured summaries (4H/daily/weekly/monthly) from Twitter, RSS, and more. Works standalone or as an [OpenClaw](https://github.com/openclaw/openclaw) / [Zylos](https://github.com/zylos-ai) skill.
 
