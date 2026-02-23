@@ -22,10 +22,10 @@ ClawMark（kevinho/clawmark）是已开源的反馈/标注组件，提供 Fab �
 
 #### 技术实现
 
-1. **前端嵌入**：在 ClawFeed 的 HTML 模板中引入 ClawMark SDK（`<script>` 标签），初始化 Fab 插件
-2. **ClawMark 后端**：复用 ClawMark 已有的 API（kevinho/clawmark 自带 Express + SQLite）
-3. **部署**：ClawMark server 作为独立服务运行（或嵌入 ClawFeed server 进程）
-4. **自动采集**：当前页面 URL、浏览器 UA、用户登录状态（如有）自动附带在反馈中
+1. **ClawMark server 部署**：独立进程部署（Kevin 确认），域名由 Lisa 配置（如 clawmark.kevinhe.io）。使用 kevinho/clawmark 仓库自带的 Express + SQLite 后端。
+2. **前端嵌入**：在 ClawFeed 的 HTML 模板中引入 ClawMark SDK（`<script>` 标签），初始化 Fab 插件，指向 ClawMark server
+3. **自动采集**：当前页面 URL、浏览器 UA、用户登录状态（如有）自动附带在反馈中
+4. **线上服务化**：ClawMark server 作为通用服务运行，不仅服务 ClawFeed，其他项目也可接入（开源集成 vs 在线集成）
 
 #### 环境策略
 
