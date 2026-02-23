@@ -13,8 +13,6 @@ export default [
         setInterval: 'readonly',
         clearTimeout: 'readonly',
         clearInterval: 'readonly',
-        __dirname: 'readonly',
-        __filename: 'readonly',
         URLSearchParams: 'readonly',
         fetch: 'readonly',
         Response: 'readonly',

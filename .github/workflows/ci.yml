@@ -29,13 +29,16 @@ jobs:
       - run: npm ci
       - name: Start server & run e2e tests
         run: |
-          # Create test DB
+          # Create data directory and test DB
+          mkdir -p data
           node -e "
-            const Database = require('better-sqlite3');
+            const { createRequire } = require('module');
+            const require2 = createRequire(process.cwd() + '/');
+            const Database = require2('better-sqlite3');
             const fs = require('fs');
             const path = require('path');
             const db = new Database('data/test.db');
-            const migrationsDir = path.join(__dirname, 'migrations');
+            const migrationsDir = path.join(process.cwd(), 'migrations');
             const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
             for (const f of files) {
               db.exec(fs.readFileSync(path.join(migrationsDir, f), 'utf8'));
@@ -49,10 +52,20 @@ jobs:
             node src/server.mjs &
           SERVER_PID=$!
 
-          # Wait for server
+          # Wait for server (fail if not ready in 15s)
+          SERVER_READY=false
           for i in $(seq 1 15); do
-            curl -s http://localhost:8767/api/health && break || sleep 1
+            if curl -sf http://localhost:8767/api/health > /dev/null 2>&1; then
+              SERVER_READY=true
+              break
+            fi
+            sleep 1
           done
+          if [ "$SERVER_READY" != "true" ]; then
+            echo "ERROR: Server failed to start within 15s"
+            kill $SERVER_PID 2>/dev/null || true
+            exit 1
+          fi
 
           # Run e2e tests against local server
           AI_DIGEST_API=http://localhost:8767/api \
