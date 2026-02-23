@@ -6,6 +6,25 @@ ClawFeed 目前的 digest 生成是全局的——所有用户看到同一份 di
 
 PR #6（已关闭）曾提交了完整的采集管道实现，但未经 PRD 审核流程。本 PRD 正式定义需求和技术方案。
 
+### 线上数据分析（来自 Lisa 导出的 production 数据）
+
+| 类型 | 数量 | 占比 | 说明 |
+|------|------|------|------|
+| `twitter_feed` | ~200+ | ~90% | 压倒性多数 |
+| `twitter_list` | 少量 | ~3% | |
+| `rss` | 1 | <1% | 仅 Hacker News |
+| `website` | 少量 | ~2% | |
+| `digest_feed` | 少量 | ~2% | Kevin's AI Digest 订阅最高（267人） |
+
+**Top 订阅 sources**：@karpathy (262)、@polin_solana (219)、0xkevinhe AI/LLM filter (139)、@akokoi1 (139) 等——**全是 Twitter 账号**。
+
+**结论**：Twitter 不是 nice-to-have，是用户最核心的信息源。采集管道必须优先支持 Twitter。
+
+**数据质量问题**（需清理）：
+- 重复 sources（@libukai 3条、@akokoi1 3条等）
+- 个别 source config 异常（id=105 塞了 600+ handles）
+- name 与实际 handle 不匹配
+
 ## 目标
 
 1. 建立 `raw_items` 中间存储层，解耦"源采集"和"digest 生成"
@@ -35,6 +54,17 @@ PR #6（已关闭）曾提交了完整的采集管道实现，但未经 PRD 审�
     ↓ 日常使用
 每次打开看到基于自己订阅的个性化 digest
 ```
+
+### 分布式可扩展设计
+
+当前 Phase 1 采用单进程 Collector，但架构需为水平扩展做准备：
+
+- **Collector 无状态**：所有状态存在数据库（sources 表的 last_fetched_at），Collector 本身无本地状态，可以多实例运行
+- **任务分发**：通过数据库行锁（`SELECT ... WHERE last_fetched_at < threshold FOR UPDATE`）或消息队列（Redis/BullMQ）分发采集任务，避免多实例重复采集同一 source
+- **数据库层**：Phase 1 用 SQLite（单机够用），后续 sources 量大时可迁移到 PostgreSQL，raw_items 写入量大时可分表（按 source_id 或时间分区）
+- **存储分离**：raw_items 内容较大时，content 字段可改为存 S3/R2 对象引用，数据库只存元数据
+
+Phase 1 先跑通单机流程，架构上留好扩展口。
 
 ### 设计
 
@@ -87,7 +117,36 @@ Digest 生成（Phase 2）
 | `github_trending` | `{ language, since }` | 4h | HTML 解析 |
 | `website` | `{ url }` | 4h | RSS 自动发现，降级到标题提取 |
 
-> Twitter 类型暂不实现（需 API 授权），后续单独处理。
+#### Twitter 源（重点支持）
+
+Twitter 是用户最高频的信息源之一，需尽可能支持。目标场景：
+
+| 子类型 | 说明 | 数据 |
+|--------|------|------|
+| `twitter_account` | 某账号的 timeline | 该用户发的推文 |
+| `twitter_foryou` | 某用户的 For You 推荐流 | 算法推荐内容 |
+| `twitter_favorites` | 某用户的 Likes/Favorites | 点赞的推文 |
+| `twitter_list` | Twitter List 的内容 | List 成员的推文 |
+| `twitter_bookmarks` | 某用户的书签 | 收藏的推文 |
+
+**获取条件分析：**
+
+| 方式 | 能拿到什么 | 前置条件 | 限制 |
+|------|-----------|----------|------|
+| Twitter API v2（Basic $100/月） | 用户 timeline、搜索 | API Key + OAuth 2.0 | 10K tweets/月读取 |
+| Twitter API v2（Pro $5000/月） | 全部端点 | API Key | 1M tweets/月 |
+| 用户自授权 OAuth | 该用户的 for you/favorites/bookmarks | 用户登录授权 | 仅限授权用户自己的数据 |
+| RSS Bridge（开源） | 公开 timeline → RSS | 自部署 RSS Bridge | 不稳定，Twitter 常封 |
+| Nitter（开源） | 公开 timeline | 自部署 Nitter 实例 | Twitter 持续打压，不可靠 |
+| 浏览器自动化 | 所有可见内容 | Puppeteer + 登录态 | 慢、脆弱、有封号风险 |
+
+**建议方案（渐进式）：**
+
+1. **Phase 1（本次）**：支持 `twitter_account`（公开 timeline），先调研现有系统如何采集 Twitter（可能已有方案），确保 raw_items 管道兼容 Twitter 数据格式
+2. **Phase 1.5**：接入 Twitter API v2 Basic（$100/月），支持正式的 timeline + 搜索；覆盖 90% 的现有用户 sources
+3. **Phase 2**：OAuth 用户授权流程，支持 for you / favorites / bookmarks（需要用户自己授权）
+
+> **线上数据验证**：224 个 sources 中 ~90% 是 twitter_feed/twitter_list，Top 订阅全是 Twitter 账号。Twitter 必须在 Phase 1 中至少有 best-effort 支持。
 
 #### 采集频率策略
 
