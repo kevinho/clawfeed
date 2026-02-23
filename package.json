@@ -6,6 +6,8 @@
   "scripts": {
     "start": "node src/server.mjs",
     "dev": "node --watch src/server.mjs",
+    "collect": "node src/collector.mjs",
+    "collect:loop": "node src/collector.mjs --loop",
     "lint": "eslint src/",
     "test": "bash test/e2e.sh"
   },
