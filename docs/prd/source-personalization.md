@@ -11,9 +11,30 @@ PR #6（已关闭）曾提交了完整的采集管道实现，但未经 PRD 审�
 1. 建立 `raw_items` 中间存储层，解耦"源采集"和"digest 生成"
 2. 实现多源采集管道（RSS、Hacker News、Reddit、GitHub Trending、Website）
 3. Source 级别去重，避免重复采集
-4. 为后续"用户级 digest 个性化"打下基础
+4. 实现用户订阅驱动的个性化 digest 体验
 
 ## 方案
+
+### 用户体验流程
+
+#### 公共 Source 与默认订阅
+
+1. 系统维护若干**公共 source**（`is_public = 1`），初期先有一份，逐步添加
+2. **未登录用户**：看到的是其中一份默认公共 source 生成的 digest（由 `DEFAULT_SOURCE_ID` 环境变量指定）
+3. **新注册用户**：登录后自动订阅其未登录时看到的那份默认 source
+4. **已有用户**：可在 Sources 页面自行添加/删除订阅，digest 内容随之变化
+
+#### 用户视角
+
+```
+未登录 → 看默认 source 的 digest（无需注册即可体验）
+    ↓ 注册/登录
+新用户 → 自动继承默认 source 订阅
+    ↓ 探索
+浏览公共 source 列表 → 订阅感兴趣的 → 取消不想看的
+    ↓ 日常使用
+每次打开看到基于自己订阅的个性化 digest
+```
 
 ### 设计
 
@@ -75,6 +96,27 @@ Digest 生成（Phase 2）
 - RSS / Website / GitHub Trending：4 小时
 - 首次采集（`last_fetched_at IS NULL`）：立即
 
+#### 采集失败处理
+
+- sources 表新增 `fetch_error_count INTEGER DEFAULT 0`
+- 采集成功：`fetch_error_count = 0`
+- 采集失败：`fetch_error_count += 1`，记录 `last_error`（JSON：错误信息 + 时间）
+- 连续失败 5 次：自动暂停该 source（`is_active = 0`），需管理员手动恢复
+- 单个 source 失败不影响其他 source 的采集
+
+#### 并发控制
+
+- Collector 默认并行采集，并发上限 5（`COLLECTOR_CONCURRENCY` 环境变量控制）
+- 使用 Promise 池限制同时发出的 HTTP 请求数
+- 避免瞬间对同一域名发大量请求
+
+#### Website 降级逻辑
+
+当 website 类型 source 找不到 RSS 时的 fallback 顺序：
+1. 查找页面 `<link rel="alternate" type="application/rss+xml">` → 有则当 RSS 采集
+2. 没有 RSS → 提取 `<title>` + `og:title` + `og:description` 作为一条 raw_item
+3. 判断"新内容"：对比 `dedup_key`（URL hash），内容变化才写入新记录
+
 #### 安全
 
 - **SSRF 防护**：DNS 解析后检查 IP，拒绝私有地址（127.x, 10.x, 172.16-31.x, 192.168.x, fc/fd IPv6）
@@ -115,16 +157,18 @@ Collector 作为独立进程运行，不阻塞 API 服务。生产环境用 PM2 
 
 新增环境变量：
 - `COLLECTOR_INTERVAL` — 采集循环间隔秒数（default: 300）
+- `COLLECTOR_CONCURRENCY` — 并行采集上限（default: 5）
+- `DEFAULT_SOURCE_ID` — 未登录用户看到的默认 source ID
 
 ### 影响范围
 
-- 新增：`migrations/010_raw_items.sql`
+- 新增：`migrations/010_raw_items.sql`（raw_items 表 + sources 表加 fetch_error_count/last_error）
 - 新增：`src/collector.mjs`（采集管道 + fetcher 模块）
 - 修改：`src/db.mjs`（raw_items CRUD 函数）
-- 修改：`src/server.mjs`（3 个 API 端点）
+- 修改：`src/server.mjs`（3 个 API 端点 + 未登录用户默认 digest 逻辑）
 - 修改：`package.json`（collect / collect:loop scripts）
 
-不影响：现有 digest 生成逻辑、认证、marks、packs、subscriptions、feed 输出。
+需要配合修改：digest 列表页根据登录状态显示不同内容（未登录 → 默认 source digest，已登录 → 订阅 sources digest）。
 
 ## 验收标准
 
@@ -135,11 +179,15 @@ Collector 作为独立进程运行，不阻塞 API 服务。生产环境用 PM2 
 5. [ ] HN 源按 min_score 过滤，metadata 包含 score 和 comments
 6. [ ] Reddit 源采集 subreddit posts
 7. [ ] GitHub Trending 源采集 trending repos
-8. [ ] Website 源支持 RSS 自动发现
+8. [ ] Website 源支持 RSS 自动发现 + 降级到标题提取
 9. [ ] SSRF 防护：私有 IP 地址被拒绝
 10. [ ] `/api/raw-items/stats` 返回各 source 统计
 11. [ ] `/api/raw-items/for-digest` 仅返回用户订阅 source 的数据
 12. [ ] 30 天 TTL 清理函数可调用
+13. [ ] 未登录用户看到默认 source 的 digest
+14. [ ] 新用户登录后自动订阅默认 source
+15. [ ] 采集连续失败 5 次的 source 被自动暂停
+16. [ ] 并发采集不超过 COLLECTOR_CONCURRENCY 上限
 
 ## 测试用例
 
@@ -157,6 +205,10 @@ Collector 作为独立进程运行，不阻塞 API 服务。生产环境用 PM2 
 | 10 | TTL 清理 | 插入 31 天前的 raw_item → 调用 cleanOldRawItems() | 该记录被删除 |
 | 11 | 采集频率 | source 1 小时前采集过（类型 rss，间隔 4h） → getSourcesDueForFetch() | 该 source 不在返回列表中 |
 | 12 | 首次采集 | 新建 source（last_fetched_at=NULL） → getSourcesDueForFetch() | 该 source 在返回列表中 |
+| 13 | 未登录默认 digest | 未登录访问 /digests | 看到默认 source 的 digest |
+| 14 | 新用户自动订阅 | 新用户首次登录 → 查看订阅列表 | 已自动订阅默认 source |
+| 15 | 采集失败暂停 | 某 source 连续失败 5 次 | is_active 变为 0，不再采集 |
+| 16 | 并发上限 | 设置 COLLECTOR_CONCURRENCY=3 → 10 个 source 同时到期 | 同时只有 3 个在采集 |
 
 ## 后续阶段（不在本次范围）
 
