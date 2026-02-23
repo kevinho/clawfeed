@@ -46,16 +46,18 @@ function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
     let size = 0;
+    let tooLarge = false;
     req.on('data', c => {
+      if (tooLarge) return;
       size += c.length;
       if (size > MAX_BODY_BYTES) {
-        req.destroy();
-        reject(new Error('payload too large'));
+        tooLarge = true;
         return;
       }
       body += c;
     });
     req.on('end', () => {
+      if (tooLarge) return reject(new Error('payload too large'));
       try { resolve(JSON.parse(body || '{}')); } catch (e) { reject(e); }
     });
   });
