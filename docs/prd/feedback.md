@@ -113,8 +113,10 @@ ALTER TABLE feedback ADD COLUMN read_at TEXT;
 21. [ ] 需人工处理状态为 `needs_human`
 22. [ ] 回复后状态为 `replied`
 23. [ ] 关闭后状态为 `closed`
-24. [ ] 状态只能按 `open → auto_draft → needs_human → replied → closed` 流转（不可逆向跳转）
-25. [ ] 管理员可通过 API 更新状态
+24. [ ] 状态正向流转：`open → auto_draft → needs_human → replied → closed`
+25. [ ] 允许 reopen：`closed → open`（用户追加反馈或问题未解决）
+26. [ ] 其他逆向跳转禁止（如 `replied → open`）
+27. [ ] 管理员可通过 API 更新状态
 
 ## 测试用例
 
@@ -156,7 +158,8 @@ ALTER TABLE feedback ADD COLUMN read_at TEXT;
 |---|------|------|----------|
 | 18 | 完整流转 | open → auto_draft → replied → closed | 每步状态变更成功 |
 | 19 | needs_human 流转 | open → needs_human → replied → closed | 每步状态变更成功 |
-| 20 | 非法流转 | 尝试 closed → open | 400 错误，禁止逆向跳转 |
+| 20 | reopen | closed → open | 状态重置为 open，允许重新处理 |
+| 20b | 非法流转 | 尝试 replied → open | 400 错误，禁止非法逆向跳转 |
 | 21 | 状态查询 | GET /api/feedback/all?status=needs_human | 只返回对应状态的反馈 |
 
 ## 后续规划
