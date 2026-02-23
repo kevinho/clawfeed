@@ -6,14 +6,21 @@
 
 ClawFeed 需要一个让用户提交反馈的渠道。需求包括：用户可以在应用内提交反馈消息，管理员可以查看和回复，反馈提交后可通知到 Lark 群。
 
+### 设计原则（参考 [Lisa 研究文档](https://lisa.kevinhe.io/research/clawfeed-feedback-prd.md)）
+
+- **自建 CRM 优先**：数据存 SQLite，IM（Lark）只是通知渠道，不是数据源
+- **HxA 模式**：Agent 自动分类 + 回复简单问题，复杂的标 `needs_human` 转人处理
+- **派发流程**：用户提交 → 写入 CRM → 通知 IM → Agent 分类处理 → 复杂转 Human
+- **状态流转**：`open` → `auto_draft`（Agent 处理中）→ `needs_human`（需人工）→ `replied` → `closed`
+
 ## 现有实现
 
 ### 前端
 
 - 页面右下角浮动气泡按钮（绿色圆形 💬 图标）
-- 点击弹出 Feedback 面板：消息输入框 + 可选邮箱/姓名 + 发送按钮
-- 已登录用户可查看历史反馈和管理员回复
-- 未登录用户也可提交（匿名反馈）
+- 点击弹出 Feedback 面板（320×420px）：消息输入框 + 发送按钮
+- 已登录用户：直接提交，身份自动关联（不显示邮箱/姓名输入框）
+- 未登录用户：可匿名提交，可选填邮箱/姓名
 - 支持中英文 i18n
 - 可通过 `/api/config` 的 `feedbackEnabled` 字段控制是否显示
 
