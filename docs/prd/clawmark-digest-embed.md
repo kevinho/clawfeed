@@ -1,84 +1,80 @@
-# ClawMark Digest 嵌入组件 PRD
+# ClawMark 嵌入 ClawFeed PRD
 
 ## 背景
 
-用户在阅读 Digest 时，想对感兴趣的条目做标注（mark）并写笔记。当前 marks 功能只有 API，没有前端交互。ClawMark 是已开源的标注/评论组件（kevinho/clawmark），需要嵌入到 ClawFeed 的 Digest 页面，让用户可以直接在页面上操作 marks。
+ClawFeed 在 staging 环境测试时，测试人员发现 bug 需要手动截图、描述问题、发到群里。流程低效且容易丢失上下文（当前页面 URL、截图、操作路径等）。
 
-**方案选择：** 嵌入 Digest 页面（Option B），不做浏览器插件。
+ClawMark（kevinho/clawmark）是已开源的反馈/标注组件，提供 Fab 插件（浮动操作按钮）。将 ClawMark 嵌入 ClawFeed 应用，让测试人员可以直接在页面上提交 bug 报告，附带自动采集的上下文信息。
 
 ## 方案
 
 ### 设计
 
-在 Digest 详情页的每个条目旁边增加一个标注按钮（bookmark icon）。用户点击后可以：
-1. 标记/取消标记该条目
-2. 添加/编辑笔记（note）
-3. 查看自己的所有 marks
+在 ClawFeed 所有页面嵌入 ClawMark Fab 插件（浮动按钮），点击后弹出反馈表单。
 
-#### 前端交互
+#### 用户交互流程
 
-- 每个 digest item 右侧显示一个 bookmark icon（未标记=空心，已标记=实心）
-- 点击 icon → 如果未标记，创建 mark；如果已标记，弹出操作面板（编辑笔记 / 删除 mark）
-- 页面顶部或侧边增加 "My Marks" 入口，展示当前用户所有 marks 列表
-- 未登录用户看到 icon 但点击后提示登录
+1. 用户在 ClawFeed 任意页面看到右下角浮动按钮
+2. 点击按钮 → 弹出反馈表单
+3. 填写：bug 描述 + 可选截图/标注
+4. 提交 → 反馈数据存入 ClawMark 后端
+5. 可选：提交后通知到 Lark 群（复用已有的 FEEDBACK_LARK_WEBHOOK）
 
-#### API 变更
+#### 技术实现
 
-现有 marks API 已基本满足需求，需补充：
+1. **前端嵌入**：在 ClawFeed 的 HTML 模板中引入 ClawMark SDK（`<script>` 标签），初始化 Fab 插件
+2. **ClawMark 后端**：复用 ClawMark 已有的 API（kevinho/clawmark 自带 Express + SQLite）
+3. **部署**：ClawMark server 作为独立服务运行（或嵌入 ClawFeed server 进程）
+4. **自动采集**：当前页面 URL、浏览器 UA、用户登录状态（如有）自动附带在反馈中
 
-1. **GET /api/marks?digestId=X** — 按 digest 筛选 marks（现有 listMarks 需加 digestId filter）
-2. **PATCH /api/marks/:id** — 更新 mark 的 note（现有只有 create/delete，缺 update note）
+#### 环境策略
 
-不需要新建表。现有 `marks` 表的字段（url, title, note, user_id, status）够用。`url` 存 digest item 的原始链接，`title` 存条目标题。
+- **Staging**：默认启用 Fab 按钮（测试环境，鼓励提 bug）
+- **Production**：可通过环境变量 `CLAWMARK_ENABLED=true/false` 控制是否显示
 
-#### 前端实现
+#### 配置
 
-- Digest 详情页（服务端渲染 HTML）中嵌入一段 JS：
-  - 页面加载时 fetch `/api/marks?digestId=X` 获取当前用户已标记的条目
-  - 渲染 bookmark icon 状态
-  - 点击事件调用 marks API
-- 使用 ClawMark 的 headless core 做标注逻辑，不依赖 ClawMark 的 UI 插件（Fab/Comment），因为 Digest 的 UI 是自定义的
+新增环境变量：
+- `CLAWMARK_ENABLED` — 是否启用 ClawMark（default: true for staging, false for production）
+- `CLAWMARK_SERVER_URL` — ClawMark 后端地址
 
 ### 影响范围
 
-- `src/server.mjs` — 新增 PATCH /api/marks/:id，listMarks 增加 digestId 过滤
-- `src/db.mjs` — updateMarkNote 函数，listMarks 加 digestId 参数
-- Digest 详情页 HTML — 嵌入前端 JS + bookmark icon
-- `test/e2e.sh` — 补充 mark update + digestId filter 测试
+- ClawFeed HTML 模板 — 新增 `<script>` 引用 + 初始化代码
+- `.env.example` — 新增 CLAWMARK_ENABLED、CLAWMARK_SERVER_URL
+- `src/server.mjs` — 渲染 HTML 时注入 ClawMark 配置（环境变量传到前端）
 
-不影响：digest 列表页、sources、packs、subscriptions、feed 输出。
+不影响：digest API、marks API、sources、packs、subscriptions、feed 输出、认证逻辑。
 
 ## 验收标准
 
-1. [ ] Digest 详情页每个条目旁有 bookmark icon
-2. [ ] 登录用户点击 icon 可创建 mark
-3. [ ] 已标记条目显示实心 icon
-4. [ ] 点击已标记 icon 可编辑笔记或删除 mark
-5. [ ] "My Marks" 页面展示用户所有 marks
-6. [ ] 未登录用户点击 icon 提示登录
-7. [ ] marks 按 digestId 过滤正常工作
-8. [ ] PATCH /api/marks/:id 可更新 note
-9. [ ] 其他用户看不到别人的 marks（数据隔离）
-10. [ ] 移动端 bookmark icon 可点击、操作面板正常
+1. [ ] ClawFeed 页面右下角显示 ClawMark 浮动按钮
+2. [ ] 点击按钮弹出反馈表单
+3. [ ] 填写描述并提交成功
+4. [ ] 提交的反馈包含当前页面 URL
+5. [ ] 提交后可选通知到 Lark 群
+6. [ ] `CLAWMARK_ENABLED=false` 时按钮不显示
+7. [ ] 不影响 ClawFeed 已有功能（digest 列表、登录、sources）
+8. [ ] 移动端浮动按钮正常显示且不遮挡主要内容
 
 ## 测试用例
 
 | # | 场景 | 步骤 | 预期结果 |
 |---|------|------|----------|
-| 1 | 创建 mark | Alice 登录 → 打开 digest 详情 → 点击条目 bookmark icon | mark 创建成功，icon 变实心 |
-| 2 | 添加笔记 | Alice 点击已标记 icon → 输入笔记 → 保存 | note 保存成功，再次打开可见 |
-| 3 | 编辑笔记 | Alice 点击已标记 icon → 修改笔记 → 保存 | PATCH /api/marks/:id 返回成功，note 更新 |
-| 4 | 删除 mark | Alice 点击已标记 icon → 点删除 | mark 删除，icon 恢复空心 |
-| 5 | 数据隔离 | Alice 标记条目 A → Bob 打开同一 digest | Bob 看不到 Alice 的 mark |
-| 6 | digestId 过滤 | Alice 在 digest 1 标记 3 条，digest 2 标记 1 条 → GET /api/marks?digestId=1 | 返回 3 条 |
-| 7 | 未登录操作 | 未登录用户点击 bookmark icon | 提示登录，不创建 mark |
-| 8 | 重复标记 | Alice 对同一 URL 点两次 bookmark | 不创建重复 mark（现有去重逻辑） |
-| 9 | My Marks 页 | Alice 标记 5 个条目 → 打开 My Marks | 展示 5 条 mark，点击可跳转原文 |
-| 10 | 移动端 | 手机浏览器打开 digest → 点击 bookmark | icon 可点击，操作面板不溢出屏幕 |
+| 1 | Fab 按钮可见 | 打开 ClawFeed 任意页面 | 右下角可见浮动按钮 |
+| 2 | 提交反馈 | 点击按钮 → 填写描述 → 提交 | 提交成功，表单关闭 |
+| 3 | 自动采集 URL | 在 /digests 页面提交反馈 | 反馈数据中包含当前页面 URL |
+| 4 | Lark 通知 | 提交反馈（配置了 FEEDBACK_LARK_WEBHOOK） | Lark 群收到通知 |
+| 5 | 环境开关 - 关 | 设置 CLAWMARK_ENABLED=false → 打开页面 | 按钮不显示 |
+| 6 | 环境开关 - 开 | 设置 CLAWMARK_ENABLED=true → 打开页面 | 按钮显示 |
+| 7 | 不影响已有功能 | 嵌入 ClawMark 后访问 digest 列表、登录、sources | 所有功能正常 |
+| 8 | 移动端 | 手机浏览器打开 ClawFeed | 浮动按钮可见、可点击、不遮挡内容 |
+| 9 | ClawMark 服务不可用 | ClawMark server 关闭 → 打开 ClawFeed | ClawFeed 正常加载，Fab 按钮可能不可用但不影响主功能 |
+| 10 | 空描述提交 | 点击按钮 → 不填内容 → 点提交 | 提示必须填写描述 |
 
 ## 回滚方案
 
-无破坏性 migration（只新增 API 逻辑 + 前端 JS）。回滚 = 回退代码版本，marks 数据不受影响。
+设置 `CLAWMARK_ENABLED=false` 即可关闭，无需回滚代码。无数据库变更。
 
 ## 负责人
 
