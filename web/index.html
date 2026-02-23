@@ -295,6 +295,9 @@ const I18N = {
     shareLink: '分享链接', copied: '已复制！', noPacks: '暂无 Pack',
     myPacks: '我的 Packs', backToPacks: '← 返回 Packs',
     newAdded: '新增', skipped: '跳过（已有）',
+    feedbackTitle: '💬 反馈', feedbackPlaceholder: '说点什么...', feedbackEmailPlaceholder: '邮箱（可选）',
+    feedbackSend: '发送', feedbackEmpty: '有什么想说的？我们会认真看每一条反馈 😊',
+    feedbackSent: '✅ 已发送', feedbackNamePlaceholder: '名字（可选）',
   },
   en: {
     title: '☀️ ClawFeed',
@@ -352,6 +355,9 @@ const I18N = {
     shareLink: 'Share link', copied: 'Copied!', noPacks: 'No packs yet',
     myPacks: 'My Packs', backToPacks: '← Back to Packs',
     newAdded: 'added', skipped: 'skipped (existing)',
+    feedbackTitle: '💬 Feedback', feedbackPlaceholder: 'Type your message...', feedbackEmailPlaceholder: 'Email (optional)',
+    feedbackSend: 'Send', feedbackEmpty: 'Have something to say? We read every piece of feedback 😊',
+    feedbackSent: '✅ Sent', feedbackNamePlaceholder: 'Name (optional)',
   }
 };
 
@@ -433,7 +439,9 @@ document.addEventListener('keydown', e => { if (e.key === 'Escape') hideChangelo
 
 // API base — auto-detect: if served under /digest/, use /digest/api; otherwise /api
 const API = (() => {
-  if (location.pathname.startsWith('/digest')) return '/digest/api';
+  const p = location.pathname;
+  if (p.startsWith('/staging/clawfeed')) return '/staging/clawfeed/api';
+  if (p.startsWith('/digest')) return '/digest/api';
   return '/api';
 })();
 
@@ -1568,6 +1576,160 @@ document.addEventListener('click', (e) => {
   });
 });
 applyLang();
+
+// ── Feedback Chat Bubble ──
+(async function() {
+  const style = document.createElement('style');
+  style.textContent = `
+    .fb-bubble { position:fixed; bottom:24px; right:24px; width:56px; height:56px; border-radius:50%; background:#40c040; border:none; cursor:pointer; font-size:24px; display:flex; align-items:center; justify-content:center; box-shadow:0 4px 16px rgba(0,0,0,.3); z-index:1000; transition:transform .2s; }
+    .fb-bubble:hover { transform:scale(1.1); }
+    .fb-bubble .fb-dot { position:absolute; top:2px; right:2px; width:12px; height:12px; background:#f44; border-radius:50%; display:none; border:2px solid #0f0f0f; }
+    body.light .fb-bubble .fb-dot { border-color:#f5f5f5; }
+    .fb-panel { position:fixed; bottom:90px; right:24px; width:320px; height:400px; background:#1a1a1a; border:1px solid #333; border-radius:12px; z-index:1001; display:flex; flex-direction:column; box-shadow:0 8px 32px rgba(0,0,0,.4); transform:translateY(20px); opacity:0; pointer-events:none; transition:transform .25s ease, opacity .25s ease; }
+    .fb-panel.open { transform:translateY(0); opacity:1; pointer-events:auto; }
+    body.light .fb-panel { background:#fff; border-color:#ddd; box-shadow:0 8px 32px rgba(0,0,0,.1); }
+    .fb-header { padding:12px 16px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center; font-size:14px; font-weight:600; }
+    body.light .fb-header { border-color:#ddd; color:#333; }
+    .fb-close { background:none; border:none; color:#888; cursor:pointer; font-size:18px; padding:0 4px; }
+    .fb-close:hover { color:#fff; }
+    body.light .fb-close:hover { color:#333; }
+    .fb-messages { flex:1; overflow-y:auto; padding:12px; display:flex; flex-direction:column; gap:8px; }
+    .fb-msg { max-width:85%; padding:8px 12px; border-radius:12px; font-size:13px; line-height:1.5; word-break:break-word; }
+    .fb-msg.user { align-self:flex-end; background:#2d5a2d; color:#e0e0e0; border-bottom-right-radius:4px; }
+    .fb-msg.reply { align-self:flex-start; background:#2a2a2a; color:#ccc; border-bottom-left-radius:4px; }
+    body.light .fb-msg.user { background:#d4edda; color:#333; }
+    body.light .fb-msg.reply { background:#e8e8e8; color:#333; }
+    .fb-msg .fb-time { font-size:10px; color:#666; margin-top:4px; }
+    .fb-empty { flex:1; display:flex; align-items:center; justify-content:center; padding:20px; text-align:center; color:#666; font-size:13px; line-height:1.6; }
+    .fb-input { padding:10px 12px; border-top:1px solid #333; display:flex; flex-direction:column; gap:6px; }
+    body.light .fb-input { border-color:#ddd; }
+    .fb-input textarea { width:100%; resize:none; background:#0f0f0f; border:1px solid #333; border-radius:8px; color:#e0e0e0; padding:8px 10px; font-size:13px; font-family:inherit; height:60px; }
+    body.light .fb-input textarea { background:#f5f5f5; border-color:#ccc; color:#333; }
+    .fb-input textarea:focus { outline:none; border-color:#40c040; }
+    .fb-input input { width:100%; background:#0f0f0f; border:1px solid #333; border-radius:6px; color:#e0e0e0; padding:6px 10px; font-size:12px; font-family:inherit; }
+    body.light .fb-input input { background:#f5f5f5; border-color:#ccc; color:#333; }
+    .fb-input input:focus { outline:none; border-color:#40c040; }
+    .fb-send { padding:6px 16px; background:#40c040; color:#fff; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-weight:500; align-self:flex-end; transition:background .2s; }
+    .fb-send:hover { background:#35a535; }
+    .fb-send:disabled { opacity:.5; cursor:default; }
+    @media (max-width:480px) { .fb-panel { left:12px; right:12px; width:auto; bottom:84px; height:60vh; } .fb-bubble { bottom:16px; right:16px; } }
+  `;
+  document.head.appendChild(style);
+
+  // Check if feedback is enabled via API config
+  try {
+    const fcfg = await fetch(`${API}/config`).then(r => r.json()).catch(() => ({}));
+    if (fcfg.feedbackEnabled === false) return; // Don't show bubble
+  } catch {}
+
+  const bubble = document.createElement('button');
+  bubble.className = 'fb-bubble';
+  bubble.innerHTML = '💬<span class="fb-dot"></span>';
+  document.body.appendChild(bubble);
+
+  const panel = document.createElement('div');
+  panel.className = 'fb-panel';
+  panel.innerHTML = `
+    <div class="fb-header"><span class="fb-title"></span><button class="fb-close">×</button></div>
+    <div class="fb-messages"></div>
+    <div class="fb-input">
+      <div class="fb-anon-fields" style="display:none;"><input class="fb-email" type="email"><input class="fb-name" style="margin-top:4px;"></div>
+      <textarea class="fb-text"></textarea>
+      <button class="fb-send"></button>
+    </div>`;
+  document.body.appendChild(panel);
+
+  let fbOpen = false, fbLoaded = false, fbLastCount = 0;
+
+  function fbUpdateI18n() {
+    panel.querySelector('.fb-title').textContent = t('feedbackTitle');
+    panel.querySelector('.fb-text').placeholder = t('feedbackPlaceholder');
+    panel.querySelector('.fb-email').placeholder = t('feedbackEmailPlaceholder');
+    panel.querySelector('.fb-name').placeholder = t('feedbackNamePlaceholder');
+    panel.querySelector('.fb-send').textContent = t('feedbackSend');
+  }
+
+  function fbRender(items) {
+    const msgs = panel.querySelector('.fb-messages');
+    if (!items.length) {
+      msgs.innerHTML = `<div class="fb-empty">${t('feedbackEmpty')}</div>`;
+      return;
+    }
+    msgs.innerHTML = items.map(m => {
+      let html = `<div class="fb-msg user">${esc(m.message)}<div class="fb-time">${m.created_at}</div></div>`;
+      if (m.reply) html += `<div class="fb-msg reply">${esc(m.reply)}<div class="fb-time">${m.replied_at || ''}</div></div>`;
+      return html;
+    }).join('');
+    msgs.scrollTop = msgs.scrollHeight;
+    // Check unread
+    const replied = items.filter(i => i.reply).length;
+    if (replied > fbLastCount) panel.querySelector('.fb-dot')?.style && (bubble.querySelector('.fb-dot').style.display = 'block');
+    fbLastCount = replied;
+  }
+
+  async function fbLoad() {
+    try {
+      const r = await fetch(`${API}/feedback`, { credentials:'same-origin' });
+      const items = await r.json();
+      fbRender(Array.isArray(items) ? items : []);
+      fbLoaded = true;
+    } catch { fbRender([]); }
+  }
+
+  bubble.onclick = () => {
+    fbOpen = !fbOpen;
+    panel.classList.toggle('open', fbOpen);
+    if (fbOpen) {
+      fbUpdateI18n();
+      // Show anon fields if not logged in
+      panel.querySelector('.fb-anon-fields').style.display = currentUser ? 'none' : 'block';
+      if (!fbLoaded || currentUser) fbLoad();
+      bubble.querySelector('.fb-dot').style.display = 'none';
+    }
+  };
+  panel.querySelector('.fb-close').onclick = () => { fbOpen = false; panel.classList.remove('open'); };
+
+  panel.querySelector('.fb-send').onclick = async () => {
+    const text = panel.querySelector('.fb-text').value.trim();
+    if (!text) return;
+    const btn = panel.querySelector('.fb-send');
+    btn.disabled = true;
+    const body = { message: text };
+    if (!currentUser) {
+      const email = panel.querySelector('.fb-email').value.trim();
+      const name = panel.querySelector('.fb-name').value.trim();
+      if (email) body.email = email;
+      if (name) body.name = name;
+    }
+    try {
+      const r = await fetch(`${API}/feedback`, { method:'POST', credentials:'same-origin', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
+      const d = await r.json();
+      if (d.ok) {
+        panel.querySelector('.fb-text').value = '';
+        showToast(t('feedbackSent'));
+        if (currentUser) fbLoad();
+        else {
+          // For anon, just show the sent message
+          const msgs = panel.querySelector('.fb-messages');
+          const empty = msgs.querySelector('.fb-empty');
+          if (empty) empty.remove();
+          msgs.insertAdjacentHTML('beforeend', `<div class="fb-msg user">${esc(text)}<div class="fb-time">just now</div></div>`);
+          msgs.scrollTop = msgs.scrollHeight;
+        }
+      }
+    } catch {}
+    btn.disabled = false;
+  };
+
+  // Send on Ctrl+Enter
+  panel.querySelector('.fb-text').addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { panel.querySelector('.fb-send').click(); }
+  });
+
+  // Periodically check for new replies (every 60s when panel open)
+  setInterval(() => { if (fbOpen && currentUser) fbLoad(); }, 60000);
+})();
+
 // Detect /pack/:slug URL
 const packPageMatch = location.pathname.match(/\/pack\/([a-z0-9_-]+)/);
 checkAuth().then(() => {
@@ -1579,6 +1741,23 @@ checkAuth().then(() => {
     renderList();
   }
 });
+
+// ClawMark — only on staging
+if (location.pathname.startsWith('/staging/')) {
+  const cmScript = document.createElement('script');
+  cmScript.type = 'module';
+  cmScript.textContent = `
+    import ClawMark from '/widget/index.js';
+    const cm = new ClawMark({
+      api: location.origin + '/api/clawmark',
+      app: 'staging-clawfeed',
+      user: (document.querySelector('.user-name')?.textContent || 'guest').trim()
+    });
+    cm.use(ClawMark.Fab);
+    cm.mount();
+  `;
+  document.body.appendChild(cmScript);
+}
 </script>
 </body>
 </html>

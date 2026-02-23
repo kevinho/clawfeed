@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount } from './db.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
@@ -79,8 +79,9 @@ function parseCookies(req) {
   return obj;
 }
 
+const COOKIE_NAME = process.env.COOKIE_NAME || env.COOKIE_NAME || 'session';
 function setSessionCookie(res, value, maxAge = 30 * 86400) {
-  const cookie = `session=${value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
+  const cookie = `${COOKIE_NAME}=${value}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${maxAge}`;
   res.setHeader('Set-Cookie', cookie);
 }
 
@@ -192,11 +193,12 @@ function httpsPost(url, body) {
 // Auth middleware: attach req.user if valid session
 function attachUser(req) {
   const cookies = parseCookies(req);
-  if (cookies.session) {
-    const sess = getSession(db, cookies.session);
+  const sessionVal = cookies[COOKIE_NAME];
+  if (sessionVal) {
+    const sess = getSession(db, sessionVal);
     if (sess) {
       req.user = { id: sess.uid, email: sess.email, name: sess.name, avatar: sess.avatar, slug: sess.slug };
-      req.sessionId = cookies.session;
+      req.sessionId = sessionVal;
     }
   }
 }
@@ -424,7 +426,8 @@ const server = createServer(async (req, res) => {
       const origin = normalizeOrigin(originCandidate);
       if (!origin || !isAllowedOrigin(origin)) return json(res, { error: 'origin not allowed' }, 400);
       const originUrl = new URL(origin);
-      const redirectUri = `${originUrl.protocol}//${originUrl.host}/api/auth/callback`;
+      const basePath = env.BASE_PATH || process.env.BASE_PATH || '';
+      const redirectUri = `${originUrl.protocol}//${originUrl.host}${basePath}/api/auth/callback`;
       const nonce = randomBytes(16).toString('hex');
       const state = signOAuthState({ origin, redirectUri, nonce, ts: Date.now() });
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
@@ -481,7 +484,8 @@ const server = createServer(async (req, res) => {
       // Set cookie and redirect to frontend
       setSessionCookie(res, sessionId);
       const originUrl = new URL(origin);
-      const frontendUrl = `${originUrl.protocol}//${originUrl.host}${originUrl.pathname.includes('/digest') ? '/digest/' : '/'}`;
+      const bp = env.BASE_PATH || process.env.BASE_PATH || (originUrl.pathname.includes('/digest') ? '/digest' : '');
+      const frontendUrl = `${originUrl.protocol}//${originUrl.host}${bp}/`;
       res.writeHead(302, { Location: frontendUrl });
       res.end();
       return;
@@ -735,6 +739,78 @@ const server = createServer(async (req, res) => {
       if (!pack) return json(res, { error: 'not found' }, 404);
       if (pack.created_by !== req.user.id) return json(res, { error: 'forbidden' }, 403);
       deletePack(db, pack.id);
+      return json(res, { ok: true });
+    }
+
+    // ── Feedback endpoints ──
+
+    if (req.method === 'POST' && path === '/api/feedback') {
+      const body = await parseBody(req);
+      if (!body.message || !body.message.trim()) return json(res, { error: 'message required' }, 400);
+      const id = createFeedback(db, req.user?.id || null, body.email || null, body.name || null, body.message.trim(), body.category || null);
+      // Lark channel notification (fire-and-forget)
+      const LARK_WEBHOOK = env.FEEDBACK_LARK_WEBHOOK;
+      if (LARK_WEBHOOK) {
+        const userName = req.user?.name || body.name || 'Anonymous';
+        const userEmail = req.user?.email || body.email || '';
+        const notifBody = JSON.stringify({ msg_type: 'text', content: { text: `📨 新反馈 #${id}\n👤 ${userName}${userEmail ? ' (' + userEmail + ')' : ''}\n💬 "${body.message.trim().slice(0, 200)}"\n🕐 ${new Date().toISOString().slice(0, 19).replace('T', ' ')}` } });
+        try {
+          const u = new URL(LARK_WEBHOOK);
+          const mod = u.protocol === 'https:' ? https : http;
+          const r = mod.request(u, { method: 'POST', headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(notifBody) } });
+          r.on('error', () => {});
+          r.end(notifBody);
+        } catch {}
+      }
+      return json(res, { ok: true, id });
+    }
+
+    if (req.method === 'GET' && path === '/api/feedback') {
+      if (!req.user) return json(res, []);
+      const feedback = getUserFeedback(db, req.user.id);
+      const unread = getUnreadFeedbackCount(db, req.user.id);
+      return json(res, { feedback, unread });
+    }
+
+    // Mark feedback as read
+    if (req.method === 'POST' && path === '/api/feedback/read') {
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+      // Mark all unread replies as read for this user
+      db.prepare("UPDATE feedback SET read_at = datetime('now') WHERE user_id = ? AND reply IS NOT NULL AND read_at IS NULL").run(req.user.id);
+      return json(res, { ok: true });
+    }
+
+    if (req.method === 'GET' && path === '/api/feedback/all') {
+      const key = params.get('key') || '';
+      const authHeader = req.headers.authorization || '';
+      const bearerKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      if (!API_KEY || (key !== API_KEY && bearerKey !== API_KEY)) return json(res, { error: 'invalid api key' }, 401);
+      return json(res, getAllFeedback(db));
+    }
+
+    const feedbackReplyMatch = path.match(/^\/api\/feedback\/(\d+)\/reply$/);
+    if (req.method === 'POST' && feedbackReplyMatch) {
+      const key = params.get('key') || '';
+      const authHeader = req.headers.authorization || '';
+      const bearerKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      if (!API_KEY || (key !== API_KEY && bearerKey !== API_KEY)) return json(res, { error: 'invalid api key' }, 401);
+      const body = await parseBody(req);
+      if (!body.reply) return json(res, { error: 'reply required' }, 400);
+      replyToFeedback(db, parseInt(feedbackReplyMatch[1]), body.reply, body.replied_by || 'agent');
+      return json(res, { ok: true });
+    }
+
+    // PATCH /api/feedback/:id/status
+    const feedbackStatusMatch = path.match(/^\/api\/feedback\/(\d+)\/status$/);
+    if (req.method === 'PATCH' && feedbackStatusMatch) {
+      const key = params.get('key') || '';
+      const authHeader = req.headers.authorization || '';
+      const bearerKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
+      if (!API_KEY || (key !== API_KEY && bearerKey !== API_KEY)) return json(res, { error: 'invalid api key' }, 401);
+      const body = await parseBody(req);
+      const validStatuses = ['open', 'auto_draft', 'needs_human', 'replied', 'closed'];
+      if (!validStatuses.includes(body.status)) return json(res, { error: 'invalid status' }, 400);
+      updateFeedbackStatus(db, parseInt(feedbackStatusMatch[1]), body.status);
       return json(res, { ok: true });
     }
 

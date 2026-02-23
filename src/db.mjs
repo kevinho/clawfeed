@@ -84,6 +84,24 @@ export function getDb(dbPath) {
   } catch (e) {
     if (!e.message.includes('duplicate column')) console.error('Migration 007:', e.message);
   }
+  // Run feedback migration (idempotent)
+  try {
+    const sql8 = readFileSync(join(ROOT, 'migrations', '008_feedback.sql'), 'utf8');
+    _db.exec(sql8);
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.error('Migration 008:', e.message);
+  }
+  // Migration 009: feedback v2 (category + read_at)
+  try {
+    const sql9 = readFileSync(join(ROOT, 'migrations', '009_feedback_v2.sql'), 'utf8');
+    for (const stmt of sql9.split(';').filter(s => s.trim())) {
+      try { _db.exec(stmt + ';'); } catch (e) {
+        if (!e.message.includes('duplicate column')) throw e;
+      }
+    }
+  } catch (e) {
+    if (!e.message.includes('duplicate column')) console.error('Migration 009:', e.message);
+  }
   // Backfill slugs for existing users
   _backfillSlugs(_db);
   return _db;
@@ -388,6 +406,38 @@ export function isSubscribed(db, userId, sourceId) {
 
 export function getSubscriberCount(db, sourceId) {
   return db.prepare('SELECT COUNT(*) as count FROM user_subscriptions WHERE source_id = ?').get(sourceId).count;
+}
+
+// ── Feedback ──
+
+export function createFeedback(db, userId, email, name, message, category) {
+  const result = db.prepare('INSERT INTO feedback (user_id, email, name, message, category) VALUES (?, ?, ?, ?, ?)').run(userId, email, name, message, category || null);
+  return result.lastInsertRowid;
+}
+
+export function getUserFeedback(db, userId) {
+  return db.prepare('SELECT id, message, reply, replied_by, replied_at, created_at, status, category, read_at FROM feedback WHERE user_id = ? ORDER BY created_at DESC').all(userId);
+}
+
+export function getAllFeedback(db) {
+  return db.prepare(`SELECT f.*, u.name as user_name, u.email as user_email, u.avatar as user_avatar
+    FROM feedback f LEFT JOIN users u ON f.user_id = u.id ORDER BY f.created_at DESC`).all();
+}
+
+export function replyToFeedback(db, id, reply, repliedBy) {
+  return db.prepare("UPDATE feedback SET reply = ?, replied_by = ?, replied_at = datetime('now'), status = 'replied' WHERE id = ?").run(reply, repliedBy, id);
+}
+
+export function updateFeedbackStatus(db, id, status) {
+  return db.prepare("UPDATE feedback SET status = ? WHERE id = ?").run(status, id);
+}
+
+export function markFeedbackRead(db, id) {
+  return db.prepare("UPDATE feedback SET read_at = datetime('now') WHERE id = ?").run(id);
+}
+
+export function getUnreadFeedbackCount(db, userId) {
+  return db.prepare("SELECT COUNT(*) as count FROM feedback WHERE user_id = ? AND reply IS NOT NULL AND read_at IS NULL").get(userId)?.count || 0;
 }
 
 // ── Config ──
