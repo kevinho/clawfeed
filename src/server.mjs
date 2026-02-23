@@ -4,7 +4,9 @@ import https from 'https';
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
+import { lookup } from 'dns/promises';
+import { isIP } from 'net';
 import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed } from './db.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -26,8 +28,10 @@ const GOOGLE_CLIENT_ID = env.GOOGLE_CLIENT_ID || process.env.GOOGLE_CLIENT_ID;
 const GOOGLE_CLIENT_SECRET = env.GOOGLE_CLIENT_SECRET || process.env.GOOGLE_CLIENT_SECRET;
 const SESSION_SECRET = env.SESSION_SECRET || process.env.SESSION_SECRET;
 const API_KEY = env.API_KEY || process.env.API_KEY || '';
-const ALLOWED_ORIGINS = (env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || 'localhost').split(',').map(o => o.trim());
+const ALLOWED_ORIGINS = (env.ALLOWED_ORIGINS || process.env.ALLOWED_ORIGINS || 'localhost').split(',').map(o => o.trim()).filter(Boolean);
 const PORT = process.env.DIGEST_PORT || env.DIGEST_PORT || 8767;
+const OAUTH_STATE_SECRET = env.OAUTH_STATE_SECRET || process.env.OAUTH_STATE_SECRET || SESSION_SECRET || API_KEY || 'dev-state-secret';
+const MAX_BODY_BYTES = 1024 * 1024;
 const DB_PATH = process.env.DIGEST_DB || join(ROOT, 'data', 'digest.db');
 
 mkdirSync(join(ROOT, 'data'), { recursive: true });
@@ -41,9 +45,18 @@ function json(res, data, status = 200) {
 function parseBody(req) {
   return new Promise((resolve, reject) => {
     let body = '';
-    req.on('data', c => body += c);
+    let size = 0;
+    req.on('data', c => {
+      size += c.length;
+      if (size > MAX_BODY_BYTES) {
+        req.destroy();
+        reject(new Error('payload too large'));
+        return;
+      }
+      body += c;
+    });
     req.on('end', () => {
-      try { resolve(JSON.parse(body)); } catch (e) { reject(e); }
+      try { resolve(JSON.parse(body || '{}')); } catch (e) { reject(e); }
     });
   });
 }
@@ -71,6 +84,77 @@ function setSessionCookie(res, value, maxAge = 30 * 86400) {
 
 function clearSessionCookie(res) {
   setSessionCookie(res, '', 0);
+}
+
+function normalizeOrigin(input) {
+  try {
+    const u = new URL(input);
+    return `${u.protocol}//${u.host}`;
+  } catch {
+    return null;
+  }
+}
+
+function isAllowedOrigin(origin) {
+  const normalized = normalizeOrigin(origin);
+  if (!normalized) return false;
+  if (!ALLOWED_ORIGINS.length) return false;
+  return ALLOWED_ORIGINS.some((allowed) => {
+    if (allowed.includes('://')) return normalizeOrigin(allowed) === normalized;
+    try { return new URL(normalized).hostname === allowed; } catch { return false; }
+  });
+}
+
+function signOAuthState(payload) {
+  const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+  const sig = createHmac('sha256', OAUTH_STATE_SECRET).update(body).digest('base64url');
+  return `${body}.${sig}`;
+}
+
+function verifyOAuthState(state) {
+  if (!state || !state.includes('.')) return null;
+  const [body, sig] = state.split('.', 2);
+  const expected = createHmac('sha256', OAUTH_STATE_SECRET).update(body).digest('base64url');
+  const a = Buffer.from(sig);
+  const b = Buffer.from(expected);
+  if (a.length !== b.length || !timingSafeEqual(a, b)) return null;
+  try {
+    return JSON.parse(Buffer.from(body, 'base64url').toString());
+  } catch {
+    return null;
+  }
+}
+
+function isPrivateOrSpecialIp(ip) {
+  if (!ip) return true;
+  if (ip.includes(':')) {
+    const n = ip.toLowerCase();
+    return n === '::1' || n.startsWith('fc') || n.startsWith('fd') || n.startsWith('fe80:') || n.startsWith('::ffff:127.');
+  }
+  const p = ip.split('.').map(Number);
+  if (p.length !== 4 || p.some((x) => Number.isNaN(x) || x < 0 || x > 255)) return true;
+  const [a, b] = p;
+  return (
+    a === 0 ||
+    a === 10 ||
+    a === 127 ||
+    (a === 169 && b === 254) ||
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168) ||
+    a >= 224
+  );
+}
+
+async function assertSafeFetchUrl(rawUrl) {
+  const u = new URL(rawUrl);
+  if (!['http:', 'https:'].includes(u.protocol)) throw new Error('invalid url scheme');
+  const host = u.hostname;
+  if (host === 'localhost' || host.endsWith('.localhost')) throw new Error('blocked host');
+  if (isIP(host) && isPrivateOrSpecialIp(host)) throw new Error('blocked host');
+  const resolved = await lookup(host, { all: true });
+  if (!resolved.length || resolved.some((r) => isPrivateOrSpecialIp(r.address))) {
+    throw new Error('blocked host');
+  }
 }
 
 // ── Google OAuth helpers ──
@@ -124,17 +208,25 @@ function _digestTitle(d, ca) {
 }
 
 // ── Source URL resolver ──
-function httpFetch(url, timeout = 5000) {
+async function httpFetch(url, timeout = 5000, redirectsLeft = 3) {
+  await assertSafeFetchUrl(url);
   return new Promise((resolve, reject) => {
     const mod = url.startsWith('https') ? https : http;
-    const r = mod.get(url, { headers: { 'User-Agent': 'AI-Digest/1.0', 'Accept': 'text/html,application/xhtml+xml,application/xml,application/json,*/*' } }, (resp) => {
-      if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+    const r = mod.get(url, { headers: { 'User-Agent': 'AI-Digest/1.0', 'Accept': 'text/html,application/xhtml+xml,application/xml,application/json,*/*' } }, async (resp) => {
+      try {
+        if (resp.statusCode >= 300 && resp.statusCode < 400 && resp.headers.location) {
+          clearTimeout(timer);
+          if (redirectsLeft <= 0) return reject(new Error('too many redirects'));
+          const nextUrl = new URL(resp.headers.location, url).toString();
+          return resolve(await httpFetch(nextUrl, Math.max(1000, timeout - 1000), redirectsLeft - 1));
+        }
+        let data = '';
+        resp.on('data', c => { data += c; if (data.length > 200000) resp.destroy(); });
+        resp.on('end', () => { clearTimeout(timer); resolve({ contentType: resp.headers['content-type'] || '', body: data }); });
+      } catch (e) {
         clearTimeout(timer);
-        return httpFetch(resp.headers.location, timeout - 1000).then(resolve).catch(reject);
+        reject(e);
       }
-      let data = '';
-      resp.on('data', c => { data += c; if (data.length > 200000) resp.destroy(); });
-      resp.on('end', () => { clearTimeout(timer); resolve({ contentType: resp.headers['content-type'] || '', body: data }); });
     });
     const timer = setTimeout(() => { r.destroy(); reject(new Error('timeout')); }, timeout);
     r.on('error', (e) => { clearTimeout(timer); reject(e); });
@@ -326,17 +418,19 @@ const server = createServer(async (req, res) => {
 
     // GET /api/auth/google
     if (req.method === 'GET' && path === '/api/auth/google') {
-      // Determine redirect URI based on origin
-      const origin = params.get('origin') || req.headers.referer || req.headers.host || 'http://localhost:' + PORT;
+      const originCandidate = params.get('origin') || req.headers.referer || (req.headers.host ? `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}` : `http://localhost:${PORT}`);
+      const origin = normalizeOrigin(originCandidate);
+      if (!origin || !isAllowedOrigin(origin)) return json(res, { error: 'origin not allowed' }, 400);
       const originUrl = new URL(origin);
-      const redirectUri = `${originUrl.protocol}//${originUrl.host}${originUrl.pathname.includes('/digest') ? '/digest' : ''}/api/auth/callback`;
-      const state = Buffer.from(JSON.stringify({ origin, redirectUri })).toString('base64url');
+      const redirectUri = `${originUrl.protocol}//${originUrl.host}/api/auth/callback`;
+      const nonce = randomBytes(16).toString('hex');
+      const state = signOAuthState({ origin, redirectUri, nonce, ts: Date.now() });
       const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=${encodeURIComponent(GOOGLE_CLIENT_ID)}` +
         `&redirect_uri=${encodeURIComponent(redirectUri)}` +
         `&response_type=code` +
         `&scope=${encodeURIComponent('openid email profile')}` +
-        `&state=${state}` +
+        `&state=${encodeURIComponent(state)}` +
         `&access_type=offline` +
         `&prompt=select_account`;
       res.writeHead(302, { Location: authUrl });
@@ -350,15 +444,14 @@ const server = createServer(async (req, res) => {
       const stateRaw = params.get('state');
       if (!code) return json(res, { error: 'missing code' }, 400);
 
-      let origin = req.headers.host ? `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}` : 'http://localhost:' + PORT;
+      let origin = req.headers.host ? `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}` : `http://localhost:${PORT}`;
       let redirectUri = `${origin}/api/auth/callback`;
-      if (stateRaw) {
-        try {
-          const st = JSON.parse(Buffer.from(stateRaw, 'base64url').toString());
-          origin = st.origin || origin;
-          redirectUri = st.redirectUri || redirectUri;
-        } catch {}
-      }
+      const st = verifyOAuthState(stateRaw);
+      if (!st) return json(res, { error: 'invalid oauth state' }, 400);
+      if (Date.now() - (st.ts || 0) > 10 * 60 * 1000) return json(res, { error: 'expired oauth state' }, 400);
+      if (!isAllowedOrigin(st.origin)) return json(res, { error: 'origin not allowed' }, 400);
+      origin = st.origin;
+      redirectUri = st.redirectUri || redirectUri;
 
       // Exchange code for tokens
       const tokenResp = await httpsPost('https://oauth2.googleapis.com/token', {
@@ -367,10 +460,7 @@ const server = createServer(async (req, res) => {
       });
       const tokens = JSON.parse(tokenResp.body);
       if (!tokens.access_token) {
-        console.error('Token exchange failed:', tokenResp.body);
-        console.error('Used redirect_uri:', redirectUri);
-        console.error('Client ID:', GOOGLE_CLIENT_ID);
-        console.error('Client Secret length:', GOOGLE_CLIENT_SECRET?.length);
+        console.error('Token exchange failed');
         return json(res, { error: 'token exchange failed', detail: tokens.error }, 500);
       }
 
@@ -427,8 +517,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'POST' && path === '/api/digests') {
       const authHeader = req.headers.authorization || '';
       const bearerKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-      const queryKey = params.get('api_key') || '';
-      if (!API_KEY || (bearerKey !== API_KEY && queryKey !== API_KEY)) return json(res, { error: 'invalid api key' }, 401);
+      if (!API_KEY || bearerKey !== API_KEY) return json(res, { error: 'invalid api key' }, 401);
       const body = await parseBody(req);
       const result = createDigest(db, body);
       return json(res, result, 201);
@@ -676,8 +765,7 @@ const server = createServer(async (req, res) => {
     if (req.method === 'PUT' && path === '/api/config') {
       const authHeader = req.headers.authorization || '';
       const bearerKey = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
-      const queryKey = params.get('api_key') || '';
-      if (!API_KEY || (bearerKey !== API_KEY && queryKey !== API_KEY)) return json(res, { error: 'invalid api key' }, 401);
+      if (!API_KEY || bearerKey !== API_KEY) return json(res, { error: 'invalid api key' }, 401);
       const body = await parseBody(req);
       for (const [k, v] of Object.entries(body)) setConfig(db, k, v);
       return json(res, { ok: true });
@@ -685,6 +773,7 @@ const server = createServer(async (req, res) => {
 
     json(res, { error: 'not found' }, 404);
   } catch (e) {
+    if (e.message === 'payload too large') return json(res, { error: e.message }, 413);
     console.error(e);
     json(res, { error: e.message }, 500);
   }
