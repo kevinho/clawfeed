@@ -5,7 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node src/server.mjs",
-    "dev": "node --watch src/server.mjs"
+    "dev": "node --watch src/server.mjs",
+    "lint": "eslint src/",
+    "test": "bash test/e2e.sh"
+  },
+  "devDependencies": {
+    "eslint": "^9.0.0"
   },
   "keywords": [
     "ai",

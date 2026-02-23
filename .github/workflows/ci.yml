@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - run: npx eslint src/
+
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm ci
+      - name: Start server & run e2e tests
+        run: |
+          # Create test DB
+          node -e "
+            const Database = require('better-sqlite3');
+            const fs = require('fs');
+            const path = require('path');
+            const db = new Database('data/test.db');
+            const migrationsDir = path.join(__dirname, 'migrations');
+            const files = fs.readdirSync(migrationsDir).filter(f => f.endsWith('.sql')).sort();
+            for (const f of files) {
+              db.exec(fs.readFileSync(path.join(migrationsDir, f), 'utf8'));
+            }
+            db.close();
+          "
+
+          # Start server in background
+          DIGEST_DB=data/test.db DIGEST_PORT=8767 API_KEY=test-key-ci \
+            SESSION_SECRET=test-secret-ci \
+            node src/server.mjs &
+          SERVER_PID=$!
+
+          # Wait for server
+          for i in $(seq 1 15); do
+            curl -s http://localhost:8767/api/health && break || sleep 1
+          done
+
+          # Run e2e tests against local server
+          AI_DIGEST_API=http://localhost:8767/api \
+            AI_DIGEST_FEED=http://localhost:8767/feed \
+            AI_DIGEST_DB=data/test.db \
+            API_KEY=test-key-ci \
+            bash test/e2e.sh
+
+          kill $SERVER_PID 2>/dev/null || true
+
+  audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: npm audit --omit=dev || true
