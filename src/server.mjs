@@ -329,6 +329,13 @@ const server = createServer(async (req, res) => {
 
   let { path, params } = parseUrl(req.url);
 
+  // ── Health check (no auth required) ──
+  if (req.method === 'GET' && (path === '/api/health' || path === '/health')) {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ status: 'ok' }));
+    return;
+  }
+
   // ── Feed endpoints (public, before auth) ──
   const feedMatch = path.match(/^\/feed\/([a-z0-9_-]+?)(?:\.(json|rss))?$/);
   if (req.method === 'GET' && feedMatch) {
