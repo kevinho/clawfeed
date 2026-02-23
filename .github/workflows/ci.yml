@@ -46,6 +46,9 @@ jobs:
             db.close();
           "
 
+          # Load test seed data (users, sessions, digests)
+          sqlite3 data/test.db < test/seed.sql
+
           # Start server in background
           DIGEST_DB=data/test.db DIGEST_PORT=8767 API_KEY=test-key-ci \
             SESSION_SECRET=test-secret-ci \
