@@ -1,5 +1,23 @@
 # Changelog
 
+## v0.8.1 — 2026-02-24
+### ✨ New
+- **Telegram group link in info banner** — Clickable TG icon + group invite link with i18n support (#16)
+- **DEVOPLOG.md** — R&D lifecycle tracking for staging/production changes (#20)
+
+### 🔧 Fixed
+- **TG icon rendering** — Replace emoji with proper SVG icon, make TG group link clickable (#17)
+- **Subtitle Twitter links** — @mentions in subtitle now link to Twitter profiles (#18)
+- **ClawHub metadata alignment** — SKILL.md credentials declared, TESTING.md HttpOnly note, README/SKILL.md consistency (#25)
+
+### 🏗️ Infrastructure
+- **CI pipeline** — GitHub Actions for lint + security audit on PRs (#2, #9)
+- **PR template & CONTRIBUTING.md** — Standardized contribution workflow (#3)
+- **Health endpoint** — `GET /api/health` for CI readiness checks (#4)
+- **Feedback webhook config** — `FEEDBACK_LARK_WEBHOOK` in .env.example (#5)
+- **Dev process docs** — Full PROCESS.md workflow (#7)
+- **Security hardening** — SSRF protection, OAuth state validation, API key handling (#1)
+
 ## v0.7.0 — 2026-02-22
 ### ✨ New
 - **Dark/Light mode toggle** — Sun/moon toggle in header, persists in localStorage
