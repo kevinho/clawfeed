@@ -1,6 +1,6 @@
-# Deploy Log
+# DevOp Log
 
-Deployment records for ClawFeed. Each entry tracks a staging validation and production release.
+Development and operations log for ClawFeed. Records the full R&D lifecycle — feature development, staging validation, production release, and infrastructure changes.
 
 ## 2026-02-24 — v0.8.1 (TG hotfix + subtitle links)
 
