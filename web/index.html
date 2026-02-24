@@ -186,11 +186,13 @@
   <div style="display:flex;justify-content:space-between;align-items:center;gap:12px;margin-bottom:8px;">
     <h1 style="margin:0;cursor:pointer" onclick="goHome()">☀️ ClawFeed</h1>
     <div style="display:flex;align-items:center;gap:8px;">
+      <a href="https://t.me/CocoAIxyz" target="_blank" rel="noopener" class="theme-toggle" title="Telegram" style="text-decoration:none;display:inline-flex;align-items:center;">✈️</a>
       <button class="theme-toggle" id="themeToggle" onclick="toggleTheme()" title="Toggle theme">🌙</button>
       <div class="auth-bar" id="authBar"></div>
     </div>
   </div>
   <p class="subtitle"><span id="subtitleText">AI news digest — powered by Lisa@OpenClaw, Jessie@Zylos</span></p>
+  <p class="info-banner" id="infoBanner" style="color:#e8a838;font-size:0.85em;margin:-16px 0 16px 0;"></p>
   <div class="tabs">
     <div class="tab active" data-type="4h">4H 简报</div>
     <div class="tab" data-type="daily">日报</div>
@@ -298,6 +300,7 @@ const I18N = {
     feedbackTitle: '💬 反馈', feedbackPlaceholder: '说点什么...', feedbackEmailPlaceholder: '邮箱（可选）',
     feedbackSend: '发送', feedbackEmpty: '有什么想说的？我们会认真看每一条反馈 😊',
     feedbackSent: '✅ 已发送', feedbackNamePlaceholder: '名字（可选）',
+    infoBanner: '🔥 感谢大家热情！线上版本今天会快速迭代修掉一些 bug，进 TG 交流群保持更新',
   },
   en: {
     title: '☀️ ClawFeed',
@@ -358,6 +361,7 @@ const I18N = {
     feedbackTitle: '💬 Feedback', feedbackPlaceholder: 'Type your message...', feedbackEmailPlaceholder: 'Email (optional)',
     feedbackSend: 'Send', feedbackEmpty: 'Have something to say? We read every piece of feedback 😊',
     feedbackSent: '✅ Sent', feedbackNamePlaceholder: 'Name (optional)',
+    infoBanner: '🔥 Thanks for the enthusiasm! We\'re shipping bug fixes today — join our TG group for updates',
   }
 };
 
@@ -374,6 +378,7 @@ function setLang(l) {
 function applyLang() {
   document.querySelector('h1').textContent = t('title');
   document.getElementById('subtitleText').textContent = t('subtitle');
+  const ib = document.getElementById('infoBanner'); if (ib) ib.textContent = t('infoBanner');
   const cl = document.getElementById('changelogLink'); if (cl) cl.textContent = t('changelog');
   document.querySelector('[data-type="4h"]').textContent = t('tab4h');
   document.querySelector('[data-type="daily"]').textContent = t('tabDaily');
