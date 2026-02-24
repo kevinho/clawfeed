@@ -18,9 +18,9 @@ npm run dev
 
 ## Workflow
 
-1. Create a feature branch from `main`:
+1. Create a feature branch from `develop`:
    ```bash
-   git checkout -b feature/your-feature main
+   git checkout -b feat/your-feature develop
    ```
 2. Make your changes
 3. Run checks locally:
@@ -28,8 +28,10 @@ npm run dev
    npm run lint
    npm test
    ```
-4. Push and open a PR — the template will guide you
+4. Push and open a PR to `develop` — the template will guide you
 5. Address review feedback, then wait for merge
+
+For the full development and release process, see [PROCESS.md](PROCESS.md).
 
 ## Code Style
 
