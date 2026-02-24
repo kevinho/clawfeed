@@ -209,11 +209,14 @@ bash test/setup.sh && bash test/e2e.sh; bash test/teardown.sh
 
 ### 切换用户
 
+> **仅限本地开发环境。** 以下方法用于在 localhost 上快速切换测试用户，不适用于 staging 或 production。
+
 先运行 `bash test/setup.sh`，然后用浏览器开发者工具设置 cookie：
 
 ```javascript
-// DevTools Console（需要先登录一次获取 non-HttpOnly cookie）
-// 或者临时在 server.mjs 去掉 HttpOnly 标记
+// DevTools Console — 仅限 localhost 开发环境
+// 测试用户的 session cookie 由 setup.sh 直接写入 SQLite，
+// 需要通过 DevTools Application 面板手动设置 cookie 值
 document.cookie = 'session=test-sess-alice; path=/; max-age=86400';
 location.reload();
 ```

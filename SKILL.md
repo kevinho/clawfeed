@@ -2,6 +2,19 @@
 
 AI-powered news digest tool. Automatically generates structured summaries (4H/daily/weekly/monthly) from Twitter and RSS feeds.
 
+## Credentials & Dependencies
+
+ClawFeed runs in **read-only mode** with zero credentials — browse digests, view feeds, switch languages. Authentication features (bookmarks, sources, packs) require additional credentials.
+
+| Credential | Purpose | Required |
+|-----------|---------|----------|
+| `GOOGLE_CLIENT_ID` | Google OAuth login | For auth features |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth login | For auth features |
+| `SESSION_SECRET` | Session cookie encryption | For auth features |
+| `API_KEY` | Digest creation endpoint protection | For write API |
+
+**Runtime dependency:** SQLite via `better-sqlite3` (native addon, bundled). No external database server required.
+
 ## Setup
 
 ```bash
@@ -20,12 +33,15 @@ npm start
 
 Configure in `.env` file:
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `DIGEST_PORT` | Server port | 8767 |
-| `GOOGLE_CLIENT_ID` | OAuth client ID (optional) | - |
-| `GOOGLE_CLIENT_SECRET` | OAuth secret (optional) | - |
-| `SESSION_SECRET` | Session encryption key | - |
+| Variable | Description | Required | Default |
+|----------|-------------|----------|---------|
+| `DIGEST_PORT` | Server port | No | 8767 |
+| `GOOGLE_CLIENT_ID` | Google OAuth client ID | For auth | - |
+| `GOOGLE_CLIENT_SECRET` | Google OAuth client secret | For auth | - |
+| `SESSION_SECRET` | Session cookie encryption key | For auth | - |
+| `API_KEY` | Digest creation API key | For write API | - |
+| `AI_DIGEST_DB` | SQLite database path | No | `data/digest.db` |
+| `ALLOWED_ORIGINS` | CORS allowed origins | No | localhost |
 
 ## API Server
 
