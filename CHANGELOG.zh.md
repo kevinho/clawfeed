@@ -1,5 +1,31 @@
 # 更新日志
 
+## v0.8.1 — 2026-02-24
+### ✨ 新增
+- **Telegram 群组链接** — Info banner 增加可点击 TG 图标 + 群邀请链接，支持中英文 (#16)
+- **DEVOPLOG.md** — 研发全生命周期追踪（开发/staging/production）(#20)
+
+### 🔧 修复
+- **TG 图标渲染** — emoji 替换为 SVG 图标，群链接可点击 (#17)
+- **副标题 Twitter 链接** — @提及 现在链接到 Twitter 个人页 (#18)
+- **ClawHub 元数据对齐** — SKILL.md 凭证声明、TESTING.md HttpOnly 说明、README/SKILL.md 一致性 (#25)
+
+### 🏗️ 基础设施
+- **CI 流水线** — GitHub Actions lint + 安全审计 (#2, #9)
+- **PR 模板 & 贡献指南** — 标准化贡献流程 (#3)
+- **健康检查** — `GET /api/health` 端点 (#4)
+- **反馈 Webhook 配置** — .env.example 增加 `FEEDBACK_LARK_WEBHOOK` (#5)
+- **开发流程文档** — 完整 PROCESS.md 工作流 (#7)
+- **安全加固** — SSRF 防护、OAuth state 校验、API key 处理 (#1)
+
+## v0.7.0 — 2026-02-22
+### ✨ 新增
+- **深色/浅色模式切换** — Header 日/月图标，localStorage 持久化
+- **README 视频演示** — demo.mp4 作为 GitHub Release 资源嵌入
+
+### 🔧 修复
+- README 视频在 GitHub 上自动播放（Release 资源 URL 替代相对路径）
+
 ## v0.6.0 — 2026-02-22
 ### ✨ 新增
 - **Source 软删除** — 删除 Source 标记 `is_deleted` 而非硬删，避免 Pack 僵尸复活

@@ -79,10 +79,12 @@ ALTER TABLE feedback ADD COLUMN read_at TEXT;
 
 ## 验收标准
 
+### 基础功能（已上线 ✅）
+
 1. [x] 页面右下角浮动反馈按钮可见
 2. [x] 点击按钮弹出反馈面板
 3. [x] 未登录用户可提交匿名反馈
-4. [x] 已登录用户反馈关联 user_id
+4. [x] 已登录用户反馈关联 user_id（不显示邮箱/姓名输入框）
 5. [x] 空消息提交被拒绝（400 错误）
 6. [x] 提交成功后面板显示确认
 7. [x] 管理员可通过 API Key 查看全部反馈
@@ -92,12 +94,38 @@ ALTER TABLE feedback ADD COLUMN read_at TEXT;
 11. [x] feedbackEnabled=false 时按钮不显示
 12. [x] 中英文切换正常
 
+### CRM 数据优先（待实现）
+
+13. [ ] 所有反馈数据以 SQLite 为主数据源，Lark 仅作通知渠道
+14. [ ] 反馈查询和统计从数据库获取，不依赖 IM 历史记录
+
+### HxA 模式 — Agent 自动处理（待实现）
+
+15. [ ] 新反馈提交后 Agent 自动分类（赋值 `category` 字段）
+16. [ ] Agent 可对简单问题（如 FAQ）自动起草回复（状态流转到 `auto_draft`）
+17. [ ] Agent 无法处理的反馈标记为 `needs_human`，通知人工接管
+18. [ ] Agent 回复和人工回复使用同一 `reply` 字段，用户无感知差异
+
+### 状态流转（待实现）
+
+19. [ ] 反馈提交后初始状态为 `open`
+20. [ ] Agent 处理中状态为 `auto_draft`
+21. [ ] 需人工处理状态为 `needs_human`
+22. [ ] 回复后状态为 `replied`
+23. [ ] 关闭后状态为 `closed`
+24. [ ] 状态正向流转：`open → auto_draft → needs_human → replied → closed`
+25. [ ] 允许 reopen：`closed → open`（用户追加反馈或问题未解决）
+26. [ ] 其他逆向跳转禁止（如 `replied → open`）
+27. [ ] 管理员可通过 API 更新状态
+
 ## 测试用例
+
+### 基础功能（已验证 ✅）
 
 | # | 场景 | 步骤 | 预期结果 |
 |---|------|------|----------|
 | 1 | 匿名提交 | 未登录 → 输入消息 → 发送 | 提交成功，返回 id |
-| 2 | 登录提交 | 已登录 → 输入消息 → 发送 | 反馈关联 user_id |
+| 2 | 登录提交 | 已登录 → 输入消息 → 发送 | 反馈关联 user_id，无邮箱/姓名输入框 |
 | 3 | 空消息拒绝 | 不输入 → 发送 | 400 错误 |
 | 4 | 查看历史 | 已登录 → 打开面板 | 显示历史反馈和回复 |
 | 5 | 管理员查看 | GET /api/feedback/all + API Key | 返回全部反馈 |
@@ -106,6 +134,33 @@ ALTER TABLE feedback ADD COLUMN read_at TEXT;
 | 8 | Lark 通知 | 配置 webhook → 提交反馈 | Lark 群收到通知 |
 | 9 | 开关关闭 | feedbackEnabled=false | 按钮不显示 |
 | 10 | i18n | 切换语言 → 打开面板 | 文本正确切换 |
+
+### Agent 自动分类（待实现）
+
+| # | 场景 | 步骤 | 预期结果 |
+|---|------|------|----------|
+| 11 | 自动分类 | 提交反馈 | category 字段被自动赋值（如 bug / feature_request / question / other） |
+| 12 | 分类为空 fallback | Agent 分类失败 | category 为 null，状态直接到 needs_human |
+| 13 | 按分类筛选 | GET /api/feedback/all?category=bug | 只返回对应分类的反馈 |
+
+### Agent 自动回复（待实现）
+
+| # | 场景 | 步骤 | 预期结果 |
+|---|------|------|----------|
+| 14 | 简单问题自动回复 | 提交 FAQ 类反馈（如「怎么订阅」） | 状态 open → auto_draft，Agent 起草回复 |
+| 15 | 复杂问题转人工 | 提交 bug 报告 | 状态 open → needs_human，通知管理员 |
+| 16 | 人工接管 auto_draft | 管理员修改 Agent 草稿并回复 | 状态 auto_draft → replied |
+| 17 | 用户无感知 | 用户查看 Agent 回复和人工回复 | 两种回复在前端显示一致 |
+
+### 状态流转（待实现）
+
+| # | 场景 | 步骤 | 预期结果 |
+|---|------|------|----------|
+| 18 | 完整流转 | open → auto_draft → replied → closed | 每步状态变更成功 |
+| 19 | needs_human 流转 | open → needs_human → replied → closed | 每步状态变更成功 |
+| 20 | reopen | closed → open | 状态重置为 open，允许重新处理 |
+| 20b | 非法流转 | 尝试 replied → open | 400 错误，禁止非法逆向跳转 |
+| 21 | 状态查询 | GET /api/feedback/all?status=needs_human | 只返回对应状态的反馈 |
 
 ## 后续规划
 
