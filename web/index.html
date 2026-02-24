@@ -191,7 +191,7 @@
       <div class="auth-bar" id="authBar"></div>
     </div>
   </div>
-  <p class="subtitle" id="subtitleText">AI news digest — powered by <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a></p>
+  <p class="subtitle" id="subtitleText">AI NEWS DIGEST — powered by <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a></p>
   <p class="info-banner" id="infoBanner" style="color:#e8a838;font-size:0.85em;margin:-16px 0 16px 0;"></p>
   <div class="tabs">
     <div class="tab active" data-type="4h">4H 简报</div>
@@ -243,7 +243,7 @@ initTheme();
 const I18N = {
   zh: {
     title: '☀️ ClawFeed',
-    subtitle: 'AI 新闻简报 — powered by <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a>',
+    subtitle: 'AI 新闻简报 — POWERED BY <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a>',
     tab4h: '4H 简报', tabDaily: '日报', tabWeekly: '周报', tabMonthly: '月报', tabMarks: '📌 Mark 收藏',
     loginBanner: '💡 登录 Google 账号即可收藏文章、管理个人书签',
     loginBtn: '登录', logout: '退出', signIn: '登录',
@@ -304,7 +304,7 @@ const I18N = {
   },
   en: {
     title: '☀️ ClawFeed',
-    subtitle: 'AI news digest — powered by <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a>',
+    subtitle: 'AI NEWS DIGEST — POWERED BY <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a>',
     tab4h: '4H Briefs', tabDaily: 'Daily', tabWeekly: 'Weekly', tabMonthly: 'Monthly', tabMarks: '📌 Marks',
     loginBanner: '💡 Sign in with Google to bookmark articles and manage your reading list',
     loginBtn: 'Login', logout: 'Logout', signIn: 'Sign in',
@@ -489,7 +489,7 @@ function renderAuthBar() {
   const moreMenu = `<div class="user-menu" onclick="document.getElementById('moreDropdown').classList.toggle('show')">
     <span style="cursor:pointer;font-size:14px;color:#666;transition:color .2s;padding:2px 4px;" onmouseover="this.style.color='#ccc'" onmouseout="this.style.color='#666'">⋯</span>
     <div id="moreDropdown" class="user-dropdown">
-      <a href="https://github.com/kevinho/clawfeed" target="_blank" onclick="event.stopPropagation();">${ghSvg} GitHub <span style="color:#555;font-size:12px;">v0.7.0</span></a>
+      <a href="https://github.com/kevinho/clawfeed" target="_blank" onclick="event.stopPropagation();">${ghSvg} GitHub <span style="color:#555;font-size:12px;">v0.8.1</span></a>
       <a href="#" onclick="event.stopPropagation();showChangelog();return false;">📋 ${t('changelog')}</a>
       <a href="#" onclick="event.stopPropagation();showRoadmap();return false;">🗺️ ${t('roadmap')}</a>
     </div>

@@ -60,12 +60,40 @@
 - 涉及 DB schema 变更必须写 migration 文件
 - 开发完成后提 PR（目标分支：`develop`）
 
-### 5. Code Review
+### 5. Code Review（PR Review 流程）
 
-- **Lisa review**（Codex 自动审查 + 手动检查）
-- 检查项：代码质量、安全性、是否符合 PRD 设计
-- Kevin 有兴趣也可以看
-- Review 通过后 merge 到 `develop`
+每个 PR 必须经过以下完整流程：
+
+```
+Proposer 提 PR → Lisa review + approve → Kevin review
+                                            │
+                                  ┌─────────┴─────────┐
+                                  │                    │
+                            有意见 → comment      无意见 → merge
+                                  │
+                            Proposer 修改
+                                  │
+                            Lisa re-review + re-approve
+                                  │
+                            Kevin 最终 merge
+```
+
+**详细步骤：**
+
+1. **Proposer 提交 PR**（目标分支：`develop`）
+2. **Lisa review**：Codex 自动审查 + 手动检查（代码质量、安全性、是否符合 PRD）
+3. **Lisa approve** PR
+4. **Kevin review**：
+   - 无意见 → 直接 merge
+   - 有意见 → 在 PR 里 comment
+5. **Proposer 按 Kevin 评论修改**，push 新 commit
+6. **Lisa re-review + re-approve**（Branch Protection 设置了 dismiss stale reviews，新 commit 会自动撤销之前的 approve）
+7. **Kevin 确认修改，merge PR**
+
+**规则：**
+- 每次 push 新 commit 后，Lisa 必须重新 review + approve
+- Kevin 是唯一有 merge 权限的人
+- PRD 类 PR 和代码类 PR 遵循相同流程
 
 ### 6. Staging 自测
 
