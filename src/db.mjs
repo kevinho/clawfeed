@@ -102,6 +102,17 @@ export function getDb(dbPath) {
   } catch (e) {
     if (!e.message.includes('duplicate column')) console.error('Migration 009:', e.message);
   }
+  // Migration 010: raw_items table + sources error tracking
+  try {
+    const sql10 = readFileSync(join(ROOT, 'migrations', '010_raw_items.sql'), 'utf8');
+    for (const stmt of sql10.split(';').map(s => s.trim()).filter(Boolean)) {
+      try { _db.exec(stmt + ';'); } catch (e) {
+        if (!e.message.includes('duplicate column') && !e.message.includes('already exists')) throw e;
+      }
+    }
+  } catch (e) {
+    if (!e.message.includes('duplicate column') && !e.message.includes('already exists')) console.error('Migration 010:', e.message);
+  }
   // Backfill slugs for existing users
   _backfillSlugs(_db);
   return _db;
@@ -438,6 +449,101 @@ export function markFeedbackRead(db, id) {
 
 export function getUnreadFeedbackCount(db, userId) {
   return db.prepare("SELECT COUNT(*) as count FROM feedback WHERE user_id = ? AND reply IS NOT NULL AND read_at IS NULL").get(userId)?.count || 0;
+}
+
+// ── Raw Items ──
+
+export function insertRawItemsBatch(db, sourceId, items) {
+  const stmt = db.prepare(
+    'INSERT OR IGNORE INTO raw_items (source_id, title, url, author, content, published_at, dedup_key, metadata) VALUES (?, ?, ?, ?, ?, ?, ?, ?)'
+  );
+  const run = db.transaction((rows) => {
+    let inserted = 0;
+    for (const item of rows) {
+      const key = item.dedupKey || (item.url ? `${sourceId}:${item.url}` : `${sourceId}:${_contentHash(item.content)}`);
+      const meta = typeof item.metadata === 'string' ? item.metadata : JSON.stringify(item.metadata || {});
+      const r = stmt.run(sourceId, item.title || '', item.url || '', item.author || '', item.content || '', item.publishedAt || null, key, meta);
+      inserted += r.changes;
+    }
+    return inserted;
+  });
+  return run(items);
+}
+
+function _contentHash(content) {
+  let h = 0;
+  const s = (content || '').slice(0, 500);
+  for (let i = 0; i < s.length; i++) {
+    h = ((h << 5) - h + s.charCodeAt(i)) | 0;
+  }
+  return 'hash:' + (h >>> 0).toString(36);
+}
+
+export function listRawItems(db, { sourceId, since, limit = 100, offset = 0 } = {}) {
+  let sql = 'SELECT ri.*, s.name as source_name, s.type as source_type FROM raw_items ri JOIN sources s ON ri.source_id = s.id';
+  const conditions = [];
+  const params = [];
+  if (sourceId) { conditions.push('ri.source_id = ?'); params.push(sourceId); }
+  if (since) { conditions.push('ri.fetched_at >= ?'); params.push(since); }
+  if (conditions.length) sql += ' WHERE ' + conditions.join(' AND ');
+  sql += ' ORDER BY ri.fetched_at DESC LIMIT ? OFFSET ?';
+  params.push(Math.min(limit, 500), offset);
+  return db.prepare(sql).all(...params);
+}
+
+export function listRawItemsForDigest(db, sourceIds, { since, limit = 500 } = {}) {
+  if (!sourceIds.length) return [];
+  const placeholders = sourceIds.map(() => '?').join(',');
+  let sql = `SELECT ri.*, s.name as source_name, s.type as source_type FROM raw_items ri JOIN sources s ON ri.source_id = s.id WHERE ri.source_id IN (${placeholders})`;
+  const params = [...sourceIds];
+  if (since) { sql += ' AND ri.fetched_at >= ?'; params.push(since); }
+  sql += ' ORDER BY ri.fetched_at DESC LIMIT ?';
+  params.push(Math.min(limit, 1000));
+  return db.prepare(sql).all(...params);
+}
+
+export function getRawItemStats(db) {
+  return db.prepare(`
+    SELECT s.id as source_id, s.name, s.type,
+      COUNT(ri.id) as total_items,
+      MAX(ri.fetched_at) as last_item_at,
+      COUNT(CASE WHEN ri.fetched_at >= datetime('now', '-24 hours') THEN 1 END) as items_24h
+    FROM sources s
+    LEFT JOIN raw_items ri ON s.id = ri.source_id
+    WHERE s.is_active = 1 AND s.is_deleted = 0
+    GROUP BY s.id
+    ORDER BY last_item_at DESC NULLS LAST
+  `).all();
+}
+
+export function cleanOldRawItems(db, daysToKeep = 30) {
+  return db.prepare("DELETE FROM raw_items WHERE fetched_at < datetime('now', '-' || ? || ' days')").run(daysToKeep);
+}
+
+export function touchSourceFetch(db, sourceId) {
+  return db.prepare("UPDATE sources SET last_fetched_at = datetime('now'), fetch_count = fetch_count + 1, fetch_error_count = 0 WHERE id = ?").run(sourceId);
+}
+
+export function recordSourceError(db, sourceId, errorMsg) {
+  const lastError = JSON.stringify({ message: errorMsg, at: new Date().toISOString() });
+  db.prepare("UPDATE sources SET fetch_error_count = fetch_error_count + 1, last_error = ? WHERE id = ?").run(lastError, sourceId);
+  // Auto-pause after 5 consecutive failures
+  db.prepare("UPDATE sources SET is_active = 0 WHERE id = ? AND fetch_error_count >= 5").run(sourceId);
+}
+
+export function getSourcesDueForFetch(db) {
+  // Only query types that have a fetcher implemented (skip twitter_* until Phase 1.5)
+  return db.prepare(`
+    SELECT * FROM sources
+    WHERE is_active = 1 AND is_deleted = 0
+    AND type IN ('rss', 'digest_feed', 'hackernews', 'reddit', 'github_trending', 'website')
+    AND (
+      last_fetched_at IS NULL
+      OR (type IN ('hackernews', 'reddit') AND last_fetched_at < datetime('now', '-1 hour'))
+      OR (type IN ('rss', 'website', 'digest_feed', 'github_trending') AND last_fetched_at < datetime('now', '-4 hours'))
+    )
+    ORDER BY last_fetched_at ASC NULLS FIRST
+  `).all();
 }
 
 // ── Config ──
