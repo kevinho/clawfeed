@@ -532,12 +532,13 @@ export function recordSourceError(db, sourceId, errorMsg) {
 }
 
 export function getSourcesDueForFetch(db) {
+  // Only query types that have a fetcher implemented (skip twitter_* until Phase 1.5)
   return db.prepare(`
     SELECT * FROM sources
     WHERE is_active = 1 AND is_deleted = 0
+    AND type IN ('rss', 'digest_feed', 'hackernews', 'reddit', 'github_trending', 'website')
     AND (
       last_fetched_at IS NULL
-      OR (type IN ('twitter_feed', 'twitter_list', 'twitter_bookmarks') AND last_fetched_at < datetime('now', '-30 minutes'))
       OR (type IN ('hackernews', 'reddit') AND last_fetched_at < datetime('now', '-1 hour'))
       OR (type IN ('rss', 'website', 'digest_feed', 'github_trending') AND last_fetched_at < datetime('now', '-4 hours'))
     )

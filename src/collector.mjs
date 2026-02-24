@@ -90,7 +90,7 @@ function httpGet(url, { timeout = 10000, maxBytes = 500000, redirectsLeft = 3 } 
         }
         let data = '';
         let size = 0;
-        resp.on('data', c => { size += c.length; if (size > maxBytes) { resp.destroy(); } else { data += c; } });
+        resp.on('data', c => { size += c.length; if (size > maxBytes) { resp.destroy(); clearTimeout(timer); reject(new Error('response too large')); } else { data += c; } });
         resp.on('end', () => { clearTimeout(timer); resolve({ status: resp.statusCode, contentType: resp.headers['content-type'] || '', body: data }); });
       } catch (e) { clearTimeout(timer); reject(e); }
     });
