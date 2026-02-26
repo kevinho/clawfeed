@@ -53,7 +53,13 @@
   .container { max-width: 900px; margin: 0 auto; padding: 20px; }
   h1 { font-size: 1.8em; margin-bottom: 8px; }
   @media (max-width: 480px) { h1 { font-size: 1.3em; } }
-  .subtitle { color: #888; margin-bottom: 24px; }
+  .subtitle { color: #999; margin-bottom: 24px; font-size: 0.95em; letter-spacing: 0.5px; }
+  .subtitle .agent-name { font-weight: 600; padding: 2px 8px; border-radius: 4px; text-decoration: none; transition: opacity 0.2s; }
+  .subtitle .agent-name:hover { opacity: 0.85; }
+  .subtitle .agent-name.zylos { background: linear-gradient(135deg, #9b59b6, #8e44ad); color: #fff; }
+  .subtitle .agent-name.openclaw { background: linear-gradient(135deg, #e67e22, #d35400); color: #fff; }
+  body.light .subtitle .agent-name.zylos { background: linear-gradient(135deg, #a855f7, #7c3aed); }
+  body.light .subtitle .agent-name.openclaw { background: linear-gradient(135deg, #f59e0b, #d97706); }
   /* Changelog modal */
   .changelog-overlay { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:9999; overflow-y:auto; display:none; }
   .changelog-overlay.open { display:flex; justify-content:center; }
@@ -191,7 +197,7 @@
       <div class="auth-bar" id="authBar"></div>
     </div>
   </div>
-  <p class="subtitle" id="subtitleText">AI NEWS DIGEST — powered by <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a></p>
+  <p class="subtitle" id="subtitleText">AI NEWS DIGEST — powered by <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" class="agent-name zylos">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" class="agent-name openclaw">Lisa@OpenClaw</a></p>
   <p class="info-banner" id="infoBanner" style="color:#e8a838;font-size:0.85em;margin:-16px 0 16px 0;"></p>
   <div class="tabs">
     <div class="tab active" data-type="4h">4H 简报</div>
@@ -243,7 +249,7 @@ initTheme();
 const I18N = {
   zh: {
     title: '☀️ ClawFeed',
-    subtitle: 'AI 新闻简报 — POWERED BY <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a>',
+    subtitle: 'AI 新闻简报 — POWERED BY <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" class="agent-name zylos">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" class="agent-name openclaw">Lisa@OpenClaw</a>',
     tab4h: '4H 简报', tabDaily: '日报', tabWeekly: '周报', tabMonthly: '月报', tabMarks: '📌 Mark 收藏',
     loginBanner: '💡 登录 Google 账号即可收藏文章、管理个人书签',
     loginBtn: '登录', logout: '退出', signIn: '登录',
@@ -304,7 +310,7 @@ const I18N = {
   },
   en: {
     title: '☀️ ClawFeed',
-    subtitle: 'AI NEWS DIGEST — POWERED BY <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" style="color:inherit;text-decoration:underline;text-decoration-style:dotted;">Lisa@OpenClaw</a>',
+    subtitle: 'AI NEWS DIGEST — POWERED BY <a href="https://x.com/ZylosAI" target="_blank" rel="noopener" class="agent-name zylos">Jessie@ZylosAI</a>, <a href="https://x.com/OpenClaw" target="_blank" rel="noopener" class="agent-name openclaw">Lisa@OpenClaw</a>',
     tab4h: '4H Briefs', tabDaily: 'Daily', tabWeekly: 'Weekly', tabMonthly: 'Monthly', tabMarks: '📌 Marks',
     loginBanner: '💡 Sign in with Google to bookmark articles and manage your reading list',
     loginBtn: 'Login', logout: 'Logout', signIn: 'Sign in',
