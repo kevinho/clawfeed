@@ -59,6 +59,12 @@ cd clawfeed
 npm install
 ```
 
+### Option 5: Docker
+```bash
+docker run -d -p 8767:8767 songtianlun/clawfeed
+docker run -d -p 8767:8767 -v clawfeed-data:/app/data songtianlun/clawfeed
+```
+
 ## Quick Start
 
 ```bash
