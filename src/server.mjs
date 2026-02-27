@@ -864,6 +864,7 @@ const server = createServer(async (req, res) => {
   }
 });
 
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`🚀 ClawFeed API running on http://127.0.0.1:${PORT}`);
+const HOST = process.env.DIGEST_HOST || '127.0.0.1';
+server.listen(PORT, HOST, () => {
+  console.log(`🚀 ClawFeed API running on http://${HOST}:${PORT}`);
 });

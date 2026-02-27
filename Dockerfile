@@ -22,6 +22,7 @@ RUN mkdir -p /app/data
 
 ENV NODE_ENV=production
 ENV DIGEST_PORT=8767
+ENV DIGEST_HOST=0.0.0.0
 
 EXPOSE 8767
 
