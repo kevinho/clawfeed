@@ -1,0 +1,40 @@
+# Dependencies (rebuilt in container)
+node_modules/
+
+# Git
+.git/
+.gitignore
+
+# Data and databases
+data/
+*.db
+*.db-journal
+*.db-wal
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+
+# Development and testing
+test/
+demo-assets/
+docs/
+
+# CI/CD
+.github/
+
+# IDE and editor
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
