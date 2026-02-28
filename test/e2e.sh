@@ -342,10 +342,38 @@ check_code "Access marks without login → 401" "401" \
   "$(curl -s -o /dev/null -w '%{http_code}' "$API/marks")"
 
 # ═══════════════════════════════════════════
-# 14. EDGE CASES
+# 14. COLLECTOR ADMIN ENDPOINTS
 # ═══════════════════════════════════════════
 echo ""
-echo "─── 14. Edge Cases ───"
+echo "─── 14. Collector Admin Endpoints ───"
+
+API_KEY="${API_KEY:-clawfeed_test_key_2026}"
+
+# Status without auth → 401
+check_code "Collect status without auth → 401" "401" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "$API/collect/status")"
+
+# Status with auth → 200
+r=$(curl -s "$API/collect/status" -H "Authorization: Bearer $API_KEY")
+check "Collect status returns sources_active" 'sources_active' "$r"
+check "Collect status returns raw_items_total" 'raw_items_total' "$r"
+check "Collect status returns sources_due" 'sources_due' "$r"
+
+# Trigger without auth → 401
+check_code "Collect trigger without auth → 401" "401" \
+  "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/collect/trigger")"
+
+# Trigger with auth → 200
+r=$(curl -s -X POST "$API/collect/trigger" -H "Authorization: Bearer $API_KEY")
+check "Collect trigger returns ok" '"ok":true' "$r"
+check "Collect trigger returns pid" 'pid' "$r"
+
+# ═══════════════════════════════════════════
+# 15. EDGE CASES
+# ═══════════════════════════════════════════
+echo ""
+echo "─── 15. Edge Cases ───"
+
 
 # Double-click install (idempotent)
 r=$(curl -s -X POST "$API/packs/$A_PACK/install" -H "$CAROL")
@@ -368,10 +396,10 @@ r=$(curl -s -X POST "$API/sources" -H "$ALICE" -H "Content-Type: application/jso
 echo "     Empty source name: $(echo "$r" | head -c 80) (TODO: add validation)"
 
 # ═══════════════════════════════════════════
-# 15. SOURCE DELETION CASCADE
+# 16. SOURCE DELETION CASCADE
 # ═══════════════════════════════════════════
 echo ""
-echo "─── 15. Source Deletion + Subscriber Impact ───"
+echo "─── 16. Source Deletion + Subscriber Impact ───"
 
 # Carol is subscribed to Alice's sources. Alice deletes one.
 CAROL_BEFORE=$(curl -s "$API/subscriptions" -H "$CAROL" | jq_len)
@@ -387,10 +415,10 @@ r=$(curl -s "$API/packs/$A_PACK")
 check "Pack still exists after source deleted" 'Alice AI Pack' "$r"
 
 # ═══════════════════════════════════════════
-# 16. SOFT DELETE
+# 17. SOFT DELETE
 # ═══════════════════════════════════════════
 echo ""
-echo "─── 16. Soft Delete ───"
+echo "─── 17. Soft Delete ───"
 
 # Create a source for soft delete testing
 SD_SRC=$(curl -s -X POST "$API/sources" -H "$ALICE" -H "Content-Type: application/json" \

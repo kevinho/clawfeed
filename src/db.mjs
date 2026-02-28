@@ -542,6 +542,32 @@ export function getSourcesDueForFetch(db) {
   `).all();
 }
 
+export function getCollectorStatus(db) {
+  const due = db.prepare(`
+    SELECT COUNT(*) as count FROM sources
+    WHERE is_active = 1 AND is_deleted = 0
+    AND type IN ('rss', 'digest_feed', 'hackernews', 'reddit', 'github_trending', 'website')
+    AND (
+      last_fetched_at IS NULL
+      OR (type IN ('hackernews', 'reddit') AND last_fetched_at < datetime('now', '-1 hour'))
+      OR (type IN ('rss', 'website', 'digest_feed', 'github_trending') AND last_fetched_at < datetime('now', '-4 hours'))
+    )
+  `).get();
+  const total = db.prepare("SELECT COUNT(*) as count FROM sources WHERE is_active = 1 AND is_deleted = 0").get();
+  const paused = db.prepare("SELECT COUNT(*) as count FROM sources WHERE is_active = 0 AND is_deleted = 0 AND fetch_error_count >= 5").get();
+  const lastFetch = db.prepare("SELECT MAX(last_fetched_at) as last_at FROM sources WHERE last_fetched_at IS NOT NULL").get();
+  const rawItemCount = db.prepare("SELECT COUNT(*) as count FROM raw_items").get();
+  const rawItems24h = db.prepare("SELECT COUNT(*) as count FROM raw_items WHERE fetched_at >= datetime('now', '-24 hours')").get();
+  return {
+    sources_due: due.count,
+    sources_active: total.count,
+    sources_paused: paused.count,
+    last_fetch_at: lastFetch.last_at,
+    raw_items_total: rawItemCount.count,
+    raw_items_24h: rawItems24h.count,
+  };
+}
+
 // ── Config ──
 
 export function getConfig(db) {
