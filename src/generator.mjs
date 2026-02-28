@@ -103,6 +103,7 @@ function callLlm(systemPrompt, userContent) {
       let data = '';
       resp.on('data', c => { data += c; });
       resp.on('end', () => {
+        clearTimeout(timer);
         try {
           const json = JSON.parse(data);
           if (resp.statusCode !== 200) {
@@ -227,8 +228,7 @@ async function generateSystemDigest(db, type, dryRun) {
   }
 
   // Check if system digest is already fresh
-  const db2 = db; // reuse connection
-  const lastSystem = db2.prepare(
+  const lastSystem = db.prepare(
     'SELECT created_at FROM digests WHERE user_id IS NULL AND type = ? ORDER BY created_at DESC LIMIT 1'
   ).get(type);
   const interval = TYPE_INTERVALS[type] || 4;

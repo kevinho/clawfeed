@@ -521,7 +521,9 @@ const server = createServer(async (req, res) => {
       if (req.user && params.get('mine') !== '0') {
         // Logged-in: show user's own digests + system fallback
         const digests = listDigestsByUser(db, req.user.id, { type, limit });
-        return json(res, digests);
+        if (digests.length) return json(res, digests);
+        // New user with no personal digests yet — fall back to system digests
+        return json(res, listDigests(db, { type, limit, offset }));
       }
       // Anonymous or explicit mine=0: show system digests only
       return json(res, listDigests(db, { type, limit, offset }));
