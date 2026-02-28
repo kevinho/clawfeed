@@ -114,6 +114,17 @@ export function getDb(dbPath) {
   } catch (e) {
     if (!e.message.includes('duplicate column') && !e.message.includes('already exists')) console.error('Migration 010:', e.message);
   }
+  // Migration 011: digest generation optimization
+  try {
+    const sql11 = readFileSync(join(ROOT, 'migrations', '011_digest_generation.sql'), 'utf8');
+    for (const stmt of sql11.split(';').map(s => s.trim()).filter(Boolean)) {
+      try { _db.exec(stmt + ';'); } catch (e) {
+        if (!e.message.includes('already exists')) throw e;
+      }
+    }
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.error('Migration 011:', e.message);
+  }
   // Backfill slugs for existing users
   _backfillSlugs(_db);
   return _db;
@@ -154,11 +165,12 @@ export function getDigest(db, id) {
   return db.prepare('SELECT * FROM digests WHERE id = ?').get(id);
 }
 
-export function createDigest(db, { type, content, metadata = '{}', created_at }) {
+export function createDigest(db, { type, content, metadata = '{}', created_at, user_id }) {
+  const uid = user_id || null;
   const sql = created_at
-    ? 'INSERT INTO digests (type, content, metadata, created_at) VALUES (?, ?, ?, ?)'
-    : 'INSERT INTO digests (type, content, metadata) VALUES (?, ?, ?)';
-  const params = created_at ? [type, content, metadata, created_at] : [type, content, metadata];
+    ? 'INSERT INTO digests (type, content, metadata, created_at, user_id) VALUES (?, ?, ?, ?, ?)'
+    : 'INSERT INTO digests (type, content, metadata, user_id) VALUES (?, ?, ?, ?)';
+  const params = created_at ? [type, content, metadata, created_at, uid] : [type, content, metadata, uid];
   const result = db.prepare(sql).run(...params);
   return { id: result.lastInsertRowid };
 }
@@ -566,6 +578,38 @@ export function getCollectorStatus(db) {
     raw_items_total: rawItemCount.count,
     raw_items_24h: rawItems24h.count,
   };
+}
+
+// ── Digest Generation ──
+
+export function getLastDigestTime(db, userId, type) {
+  const row = db.prepare(
+    'SELECT created_at FROM digests WHERE user_id = ? AND type = ? ORDER BY created_at DESC LIMIT 1'
+  ).get(userId, type);
+  return row ? row.created_at : null;
+}
+
+export function getActiveSubscriptionSourceIds(db, userId) {
+  return db.prepare(
+    'SELECT s.id FROM user_subscriptions us JOIN sources s ON us.source_id = s.id WHERE us.user_id = ? AND s.is_active = 1 AND s.is_deleted = 0'
+  ).all(userId).map(r => r.id);
+}
+
+export function getUsersDueForDigest(db, type, intervalHours) {
+  // Find users with active subscriptions whose last digest of this type
+  // is older than the interval (or who have never had one)
+  return db.prepare(`
+    SELECT DISTINCT us.user_id as id, u.name, u.slug
+    FROM user_subscriptions us
+    JOIN users u ON us.user_id = u.id
+    JOIN sources s ON us.source_id = s.id
+    WHERE s.is_active = 1 AND s.is_deleted = 0
+    AND NOT EXISTS (
+      SELECT 1 FROM digests d
+      WHERE d.user_id = us.user_id AND d.type = ?
+      AND d.created_at >= datetime('now', '-' || ? || ' hours')
+    )
+  `).all(type, intervalHours);
 }
 
 // ── Config ──

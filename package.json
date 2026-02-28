@@ -8,6 +8,8 @@
     "dev": "node --watch src/server.mjs",
     "collect": "node src/collector.mjs",
     "collect:loop": "node src/collector.mjs --loop",
+    "generate": "node src/generator.mjs",
+    "generate:daily": "node src/generator.mjs --type daily",
     "lint": "eslint src/",
     "test": "bash test/e2e.sh"
   },
