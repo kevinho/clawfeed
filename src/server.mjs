@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime } from './db.mjs';
 import { fork } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -516,9 +516,29 @@ const server = createServer(async (req, res) => {
 
     if (req.method === 'GET' && path === '/api/digests') {
       const type = params.get('type') || undefined;
-      const limit = parseInt(params.get('limit') || '20');
-      const offset = parseInt(params.get('offset') || '0');
+      const limit = parseInt(params.get('limit') || '20', 10);
+      const offset = parseInt(params.get('offset') || '0', 10);
+      if (req.user && params.get('mine') !== '0') {
+        // Logged-in: show user's own digests + system fallback
+        const digests = listDigestsByUser(db, req.user.id, { type, limit });
+        return json(res, digests);
+      }
+      // Anonymous or explicit mine=0: show system digests only
       return json(res, listDigests(db, { type, limit, offset }));
+    }
+
+    // GET /api/digest-status — check if user has personalized digests
+    if (req.method === 'GET' && path === '/api/digest-status') {
+      if (!req.user) return json(res, { personalized: false, reason: 'not_logged_in' });
+      const sourceIds = getActiveSubscriptionSourceIds(db, req.user.id);
+      if (!sourceIds.length) return json(res, { personalized: false, reason: 'no_subscriptions' });
+      const lastDigest = getLastDigestTime(db, req.user.id, params.get('type') || '4h');
+      return json(res, {
+        personalized: !!lastDigest,
+        subscriptions: sourceIds.length,
+        last_digest: lastDigest,
+        reason: lastDigest ? 'ready' : 'pending_generation',
+      });
     }
 
     const digestMatch = path.match(/^\/api\/digests\/(\d+)$/);
