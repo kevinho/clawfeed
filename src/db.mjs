@@ -125,6 +125,17 @@ export function getDb(dbPath) {
   } catch (e) {
     if (!e.message.includes('already exists')) console.error('Migration 011:', e.message);
   }
+  // Migration 012: Telegram push notifications
+  try {
+    const sql12 = readFileSync(join(ROOT, 'migrations', '012_telegram.sql'), 'utf8');
+    for (const stmt of sql12.split(';').map(s => s.trim()).filter(Boolean)) {
+      try { _db.exec(stmt + ';'); } catch (e) {
+        if (!e.message.includes('already exists')) throw e;
+      }
+    }
+  } catch (e) {
+    if (!e.message.includes('already exists')) console.error('Migration 012:', e.message);
+  }
   // Backfill slugs for existing users
   _backfillSlugs(_db);
   return _db;
@@ -626,4 +637,76 @@ export function getConfig(db) {
 export function setConfig(db, key, value) {
   const v = typeof value === 'string' ? value : JSON.stringify(value);
   db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run(key, v);
+}
+
+// ── Telegram ──
+
+export function saveTelegramLink(db, userId, chatId, username) {
+  return db.prepare(
+    'INSERT OR REPLACE INTO telegram_links (user_id, chat_id, enabled, digest_types) VALUES (?, ?, 1, ?)'
+  ).run(userId, chatId, JSON.stringify(['4h', 'daily']));
+}
+
+export function getTelegramLink(db, userId) {
+  return db.prepare('SELECT * FROM telegram_links WHERE user_id = ?').get(userId);
+}
+
+export function getTelegramLinkByChatId(db, chatId) {
+  return db.prepare('SELECT * FROM telegram_links WHERE chat_id = ?').get(chatId);
+}
+
+export function removeTelegramLink(db, userId) {
+  return db.prepare('DELETE FROM telegram_links WHERE user_id = ?').run(userId);
+}
+
+export function updateTelegramPrefs(db, userId, { enabled, digestTypes }) {
+  const sets = [];
+  const params = [];
+  if (enabled !== undefined) { sets.push('enabled = ?'); params.push(enabled ? 1 : 0); }
+  if (digestTypes) { sets.push('digest_types = ?'); params.push(JSON.stringify(digestTypes)); }
+  if (!sets.length) return { changes: 0 };
+  params.push(userId);
+  return db.prepare(`UPDATE telegram_links SET ${sets.join(', ')} WHERE user_id = ?`).run(...params);
+}
+
+export function getUsersWithTelegramForDigest(db, digestType) {
+  // Filter by digest_types JSON array containing the given type
+  return db.prepare(`
+    SELECT tl.chat_id, tl.user_id, u.name, u.slug
+    FROM telegram_links tl
+    JOIN users u ON tl.user_id = u.id
+    WHERE tl.enabled = 1
+    AND EXISTS (
+      SELECT 1 FROM json_each(tl.digest_types) WHERE json_each.value = ?
+    )
+  `).all(digestType);
+}
+
+export function getEnabledTelegramUsers(db) {
+  return db.prepare(`
+    SELECT tl.*, u.name, u.slug
+    FROM telegram_links tl
+    JOIN users u ON tl.user_id = u.id
+    WHERE tl.enabled = 1
+  `).all();
+}
+
+export function createLinkCode(db, code, chatId, username) {
+  // Clean up old codes first (> 10 min)
+  db.prepare("DELETE FROM telegram_link_codes WHERE created_at < datetime('now', '-10 minutes')").run();
+  return db.prepare('INSERT OR REPLACE INTO telegram_link_codes (code, chat_id, chat_username) VALUES (?, ?, ?)').run(code, chatId, username || null);
+}
+
+export function consumeLinkCode(db, code) {
+  const row = db.prepare(
+    "SELECT * FROM telegram_link_codes WHERE code = ? AND created_at >= datetime('now', '-10 minutes')"
+  ).get(code);
+  if (row) db.prepare('DELETE FROM telegram_link_codes WHERE code = ?').run(code);
+  return row;
+}
+
+export function logPush(db, userId, channel, digestId, status, error) {
+  return db.prepare(
+    'INSERT INTO push_log (user_id, channel, digest_id, status, error) VALUES (?, ?, ?, ?, ?)'
+  ).run(userId, channel, digestId || null, status, error || null);
 }
