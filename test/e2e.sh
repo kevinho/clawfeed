@@ -465,6 +465,48 @@ r=$(curl -s "$API/sources")
 check_not "16.7 Deleted source not in active sources" 'SoftDel Test' "$r"
 
 # ═══════════════════════════════════════════
+# 17. Chat Widget API
+# ═══════════════════════════════════════════
+echo "17. Chat Widget API"
+
+# 17.1 POST /chat without message → 400
+r=$(curl -s -X POST "$API/chat" -H "Content-Type: application/json" -d '{}')
+check "17.1 Chat without message → error" '"error"' "$r"
+
+# 17.2 POST /chat with message → reply or 503 (if LLM not configured)
+r=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/chat" -H "Content-Type: application/json" -d '{"message":"hello"}')
+if [ "$r" = "503" ]; then
+  TOTAL=$((TOTAL+1)); PASS=$((PASS+1)); SKIP=$((SKIP+1))
+  printf "  ⏭️  17.2 Chat with message → 503 (LLM not configured, skipped)\n"
+elif [ "$r" = "200" ]; then
+  r2=$(curl -s -X POST "$API/chat" -H "Content-Type: application/json" -d '{"message":"hello"}')
+  check "17.2 Chat with message → reply" '"reply"' "$r2"
+else
+  TOTAL=$((TOTAL+1)); FAIL=$((FAIL+1))
+  printf "  ❌ 17.2 Chat with message → unexpected status %s\n" "$r"
+fi
+
+# 17.3 POST /chat with history
+r=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/chat" -H "Content-Type: application/json" -d '{"message":"follow up","history":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"}]}')
+if [ "$r" = "200" ] || [ "$r" = "503" ]; then
+  TOTAL=$((TOTAL+1)); PASS=$((PASS+1))
+  printf "  ✅ 17.3 Chat with history → %s\n" "$r"
+else
+  TOTAL=$((TOTAL+1)); FAIL=$((FAIL+1))
+  printf "  ❌ 17.3 Chat with history → unexpected %s\n" "$r"
+fi
+
+# 17.4 POST /chat with digest_id
+r=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/chat" -H "Content-Type: application/json" -d '{"message":"summarize","digest_id":1}')
+if [ "$r" = "200" ] || [ "$r" = "503" ]; then
+  TOTAL=$((TOTAL+1)); PASS=$((PASS+1))
+  printf "  ✅ 17.4 Chat with digest_id → %s\n" "$r"
+else
+  TOTAL=$((TOTAL+1)); FAIL=$((FAIL+1))
+  printf "  ❌ 17.4 Chat with digest_id → unexpected %s\n" "$r"
+fi
+
+# ═══════════════════════════════════════════
 # RESULTS
 # ═══════════════════════════════════════════
 echo ""
