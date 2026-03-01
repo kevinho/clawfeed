@@ -643,10 +643,10 @@ export function setConfig(db, key, value) {
 
 export function saveTelegramLink(db, userId, chatId, username) {
   return db.prepare(
-    `INSERT INTO telegram_links (user_id, chat_id, enabled, digest_types)
-     VALUES (?, ?, 1, ?)
-     ON CONFLICT(user_id) DO UPDATE SET chat_id = excluded.chat_id`
-  ).run(userId, chatId, JSON.stringify(['4h', 'daily']));
+    `INSERT INTO telegram_links (user_id, chat_id, chat_username, enabled, digest_types)
+     VALUES (?, ?, ?, 1, ?)
+     ON CONFLICT(user_id) DO UPDATE SET chat_id = excluded.chat_id, chat_username = excluded.chat_username`
+  ).run(userId, chatId, username || null, JSON.stringify(['4h', 'daily']));
 }
 
 export function getTelegramLink(db, userId) {

@@ -65,6 +65,8 @@ const API_BASE = `https://api.telegram.org/bot${BOT_TOKEN}`;
 // ── Telegram API helpers ──
 
 function tgApi(method, body) {
+  // getUpdates uses its own long-poll timeout; other calls get 30s
+  const timeoutMs = method === 'getUpdates' ? (POLL_TIMEOUT + 10) * 1000 : 30000;
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body || {});
     const url = new URL(`${API_BASE}/${method}`);
@@ -90,6 +92,7 @@ function tgApi(method, body) {
         }
       });
     });
+    req.setTimeout(timeoutMs, () => { req.destroy(new Error(`Telegram API ${method}: timeout after ${timeoutMs}ms`)); });
     req.on('error', reject);
     req.write(payload);
     req.end();
@@ -142,10 +145,12 @@ async function handleDigest(db, msg) {
     return;
   }
 
-  const digests = listDigestsByUser(db, link.user_id, { type: '4h', limit: 1 });
+  // Only show user's own digests (not system digests with user_id=NULL)
+  const digests = listDigestsByUser(db, link.user_id, { type: '4h', limit: 5 })
+    .filter(d => d.user_id === link.user_id);
   if (!digests.length) {
-    // Try daily
-    const daily = listDigestsByUser(db, link.user_id, { type: 'daily', limit: 1 });
+    const daily = listDigestsByUser(db, link.user_id, { type: 'daily', limit: 5 })
+      .filter(d => d.user_id === link.user_id);
     if (daily.length) {
       await sendDigestMessage(chatId, daily[0]);
       return;
@@ -296,23 +301,23 @@ async function pollLoop(db) {
         const cmd = text.split(/\s/)[0].split('@')[0].toLowerCase();
 
         try {
+          // Only process commands in private chats — prevent info leaks in groups
+          if (msg.chat.type !== 'private') continue;
+
           switch (cmd) {
             case '/start': await handleStart(db, msg); break;
             case '/digest': await handleDigest(db, msg); break;
             case '/stop': await handleStop(db, msg); break;
             case '/settings': await handleSettings(db, msg); break;
             default:
-              // Ignore non-command messages in private chats
-              if (msg.chat.type === 'private') {
-                await sendMessage(msg.chat.id,
-                  `I don't understand that command.\n\n` +
-                  `Available commands:\n` +
-                  `/start — Link your account\n` +
-                  `/digest — Get latest digest\n` +
-                  `/settings — Push settings\n` +
-                  `/stop — Unlink account`
-                );
-              }
+              await sendMessage(msg.chat.id,
+                `I don't understand that command.\n\n` +
+                `Available commands:\n` +
+                `/start — Link your account\n` +
+                `/digest — Get latest digest\n` +
+                `/settings — Push settings\n` +
+                `/stop — Unlink account`
+              );
           }
         } catch (e) {
           console.error(`[telegram] Error handling ${cmd}:`, e.message);

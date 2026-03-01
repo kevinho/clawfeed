@@ -3,6 +3,7 @@ CREATE TABLE IF NOT EXISTS telegram_links (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
   chat_id TEXT NOT NULL,
+  chat_username TEXT,
   enabled INTEGER NOT NULL DEFAULT 1,
   digest_types TEXT NOT NULL DEFAULT '["4h","daily"]',
   linked_at TEXT NOT NULL DEFAULT (datetime('now')),

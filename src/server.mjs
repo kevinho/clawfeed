@@ -958,7 +958,7 @@ const server = createServer(async (req, res) => {
       const linkData = consumeLinkCode(db, code);
       if (!linkData) return json(res, { error: 'invalid or expired code' }, 400);
       saveTelegramLink(db, req.user.id, linkData.chat_id, linkData.chat_username);
-      return json(res, { ok: true, chat_id: linkData.chat_id });
+      return json(res, { ok: true });
     }
 
     // DELETE /api/settings/telegram — unlink
