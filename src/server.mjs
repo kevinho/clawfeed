@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime, getEmailPreference, upsertEmailPreference, getEmailPrefByToken } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime, getEmailPreference, upsertEmailPreference, getEmailPrefByToken, getTelegramLink, consumeLinkCode, saveTelegramLink, removeTelegramLink, updateTelegramPrefs } from './db.mjs';
 import { fork } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -985,6 +985,54 @@ const server = createServer(async (req, res) => {
         return;
       }
       return json(res, { ok: true, message: 'unsubscribed' });
+    }
+
+    // ── Telegram settings endpoints ──
+
+    if (req.method === 'GET' && path === '/api/settings/telegram') {
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+      const link = getTelegramLink(db, req.user.id);
+      if (!link) return json(res, { linked: false });
+      return json(res, {
+        linked: true,
+        enabled: !!link.enabled,
+        digest_types: JSON.parse(link.digest_types || '[]'),
+        linked_at: link.linked_at,
+      });
+    }
+
+    // POST /api/settings/telegram/link — verify code from Telegram bot
+    if (req.method === 'POST' && path === '/api/settings/telegram/link') {
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+      const body = await parseBody(req);
+      const code = (body.code || '').trim();
+      if (!code || code.length !== 6) return json(res, { error: 'invalid code' }, 400);
+      const linkData = consumeLinkCode(db, code);
+      if (!linkData) return json(res, { error: 'invalid or expired code' }, 400);
+      saveTelegramLink(db, req.user.id, linkData.chat_id, linkData.chat_username);
+      return json(res, { ok: true });
+    }
+
+    // DELETE /api/settings/telegram — unlink
+    if (req.method === 'DELETE' && path === '/api/settings/telegram') {
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+      removeTelegramLink(db, req.user.id);
+      return json(res, { ok: true });
+    }
+
+    // PUT /api/settings/telegram — update preferences
+    if (req.method === 'PUT' && path === '/api/settings/telegram') {
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+      const body = await parseBody(req);
+      const validTypes = ['4h', 'daily', 'weekly', 'monthly'];
+      const digestTypes = Array.isArray(body.digest_types)
+        ? body.digest_types.filter(t => validTypes.includes(t))
+        : undefined;
+      updateTelegramPrefs(db, req.user.id, {
+        enabled: body.enabled,
+        digestTypes,
+      });
+      return json(res, { ok: true });
     }
 
     json(res, { error: 'not found' }, 404);

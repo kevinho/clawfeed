@@ -10,6 +10,7 @@
     "collect:loop": "node src/collector.mjs --loop",
     "generate": "node src/generator.mjs",
     "generate:daily": "node src/generator.mjs --type daily",
+    "telegram": "node src/telegram.mjs",
     "email": "node src/emailer.mjs",
     "email:daily": "node src/emailer.mjs --type daily",
     "email:weekly": "node src/emailer.mjs --type weekly",
