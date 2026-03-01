@@ -55,9 +55,26 @@ const MAX_RETRIES = 2;
 const templatePath = join(ROOT, 'templates', 'email-digest.html');
 const EMAIL_TEMPLATE = existsSync(templatePath) ? readFileSync(templatePath, 'utf8') : null;
 
+// ── HTML escaping (prevent XSS from external RSS/feed content) ──
+function escapeHtml(str) {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;');
+}
+
+function sanitizeHref(url) {
+  const trimmed = url.trim();
+  if (/^https?:\/\//i.test(trimmed)) return trimmed;
+  return '#';
+}
+
 // ── Simple markdown to HTML (for digest content) ──
 function markdownToHtml(md) {
-  return md
+  // Escape HTML entities first to prevent injection
+  const escaped = escapeHtml(md);
+  return escaped
     // Headers
     .replace(/^### (.+)$/gm, '<h3>$1</h3>')
     .replace(/^## (.+)$/gm, '<h2>$1</h2>')
@@ -65,14 +82,14 @@ function markdownToHtml(md) {
     // Bold and italic
     .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
     .replace(/\*(.+?)\*/g, '<em>$1</em>')
-    // Links
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    // Links (sanitize href to http/https only)
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, text, url) => `<a href="${sanitizeHref(url)}">${text}</a>`)
     // Inline code
     .replace(/`([^`]+)`/g, '<code>$1</code>')
     // Horizontal rules
     .replace(/^---$/gm, '<hr>')
     // Blockquotes
-    .replace(/^> (.+)$/gm, '<blockquote>$1</blockquote>')
+    .replace(/&gt; (.+)$/gm, '<blockquote>$1</blockquote>')
     // Unordered lists (simple single-level)
     .replace(/^- (.+)$/gm, '<li>$1</li>')
     .replace(/(<li>.*<\/li>\n?)+/g, (match) => `<ul>${match}</ul>`)
@@ -139,15 +156,12 @@ async function sendDigestToUser(db, resend, user, type, dryRun) {
     return null;
   }
 
-  // Get latest digest for this user
-  const digests = listDigestsByUser(db, user.id, { type: type === 'daily' ? '4h' : type, limit: 1 });
-  // For daily email: get the latest daily digest; for weekly: get latest weekly
-  const digestType = type;
-  const emailDigests = listDigestsByUser(db, user.id, { type: digestType, limit: 1 });
-  const digest = emailDigests[0];
+  // Get latest digest for this user matching the email frequency type
+  const digests = listDigestsByUser(db, user.id, { type, limit: 1 });
+  const digest = digests[0];
 
   if (!digest) {
-    console.log(`  [skip] ${user.name || user.id}: no ${digestType} digest available`);
+    console.log(`  [skip] ${user.name || user.id}: no ${type} digest available`);
     return null;
   }
 

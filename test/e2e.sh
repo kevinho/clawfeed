@@ -517,12 +517,23 @@ check "18.9 Bad token → 404" '"error"' "$r"
 r=$(curl -s -X PUT "$API/email/preferences" -H "$BOB" -H "Content-Type: application/json" -d '{"frequency":"daily"}')
 check "18.10 Bob sets daily" '"frequency":"daily"' "$r"
 
-# 18.11 GET unsubscribe returns HTML page
+# 18.11 GET unsubscribe shows confirmation (does NOT modify state)
 if [ -n "$UNSUB_TOKEN" ]; then
   # Re-enable first
   curl -s -X PUT "$API/email/preferences" -H "$ALICE" -H "Content-Type: application/json" -d '{"frequency":"daily"}' > /dev/null
   r=$(curl -s "$API/email/unsubscribe?token=$UNSUB_TOKEN")
-  check "18.11 GET unsubscribe → HTML page" 'Unsubscribed' "$r"
+  check "18.11 GET unsubscribe → confirmation page" 'Unsubscribe from ClawFeed' "$r"
+
+  # 18.12 GET does NOT actually unsubscribe (prefetcher safety)
+  r=$(curl -s "$API/email/preferences" -H "$ALICE")
+  check "18.12 GET did not change pref (still daily)" '"frequency":"daily"' "$r"
+
+  # 18.13 POST actually unsubscribes
+  r=$(curl -s -X POST "$API/email/unsubscribe?token=$UNSUB_TOKEN")
+  check "18.13 POST unsubscribe executes" '"ok":true' "$r"
+
+  r=$(curl -s "$API/email/preferences" -H "$ALICE")
+  check "18.14 POST confirmed → off" '"frequency":"off"' "$r"
 else
   SKIP=$((SKIP+1))
   echo "  ⏭ 18.11 Skipped (no token)"
