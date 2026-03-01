@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime, getEmailPreference, upsertEmailPreference, getEmailPrefByToken } from './db.mjs';
 import { fork } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -933,6 +933,44 @@ const server = createServer(async (req, res) => {
       const body = await parseBody(req);
       for (const [k, v] of Object.entries(body)) setConfig(db, k, v);
       return json(res, { ok: true });
+    }
+
+    // ── Email preferences endpoints ──
+
+    // GET /api/email/preferences — get current user's email pref
+    if (req.method === 'GET' && path === '/api/email/preferences') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const pref = getEmailPreference(db, req.user.id);
+      return json(res, pref ? { frequency: pref.frequency, last_sent_at: pref.last_sent_at } : { frequency: 'off', last_sent_at: null });
+    }
+
+    // PUT /api/email/preferences — update email frequency
+    if (req.method === 'PUT' && path === '/api/email/preferences') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const body = await parseBody(req);
+      const freq = body.frequency;
+      if (!['off', 'daily', 'weekly'].includes(freq)) {
+        return json(res, { error: 'frequency must be off, daily, or weekly' }, 400);
+      }
+      upsertEmailPreference(db, req.user.id, freq);
+      return json(res, { ok: true, frequency: freq });
+    }
+
+    // GET /api/email/unsubscribe?token=... — one-click unsubscribe
+    if ((req.method === 'GET' || req.method === 'POST') && path === '/api/email/unsubscribe') {
+      const token = params.get('token');
+      if (!token) return json(res, { error: 'token required' }, 400);
+      const pref = getEmailPrefByToken(db, token);
+      if (!pref) return json(res, { error: 'invalid token' }, 404);
+      upsertEmailPreference(db, pref.user_id, 'off');
+      // Return a simple HTML page for browser clicks
+      if (req.method === 'GET') {
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title><style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f4f4f7;}div{text-align:center;padding:40px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);max-width:400px;}</style></head><body><div><h2>Unsubscribed</h2><p>You've been unsubscribed from ClawFeed email digests.</p><p>You can re-enable emails anytime from your ClawFeed settings.</p></div></body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+        return;
+      }
+      return json(res, { ok: true, message: 'unsubscribed' });
     }
 
     json(res, { error: 'not found' }, 404);

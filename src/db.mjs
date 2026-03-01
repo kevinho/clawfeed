@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import { createHash } from 'crypto';
+import { createHash, randomBytes } from 'crypto';
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
@@ -124,6 +124,17 @@ export function getDb(dbPath) {
     }
   } catch (e) {
     if (!e.message.includes('already exists')) console.error('Migration 011:', e.message);
+  }
+  // Migration 012: email preferences
+  try {
+    const sql12 = readFileSync(join(ROOT, 'migrations', '012_email_preferences.sql'), 'utf8');
+    for (const stmt of sql12.split(';').map(s => s.trim()).filter(Boolean)) {
+      try { _db.exec(stmt + ';'); } catch (e) {
+        if (!e.message.includes('already exists') && !e.message.includes('duplicate column')) throw e;
+      }
+    }
+  } catch (e) {
+    if (!e.message.includes('already exists') && !e.message.includes('duplicate column')) console.error('Migration 012:', e.message);
   }
   // Backfill slugs for existing users
   _backfillSlugs(_db);
@@ -626,4 +637,58 @@ export function getConfig(db) {
 export function setConfig(db, key, value) {
   const v = typeof value === 'string' ? value : JSON.stringify(value);
   db.prepare('INSERT OR REPLACE INTO config (key, value) VALUES (?, ?)').run(key, v);
+}
+
+// ── Email Preferences ──
+
+export function getEmailPreference(db, userId) {
+  return db.prepare('SELECT * FROM email_preferences WHERE user_id = ?').get(userId);
+}
+
+export function upsertEmailPreference(db, userId, frequency) {
+  const existing = getEmailPreference(db, userId);
+  if (existing) {
+    db.prepare("UPDATE email_preferences SET frequency = ?, updated_at = datetime('now') WHERE user_id = ?").run(frequency, userId);
+    return existing;
+  }
+  const token = randomBytes(32).toString('hex');
+  db.prepare('INSERT INTO email_preferences (user_id, frequency, unsubscribe_token) VALUES (?, ?, ?)').run(userId, frequency, token);
+  return getEmailPreference(db, userId);
+}
+
+export function getEmailPrefByToken(db, token) {
+  return db.prepare(`
+    SELECT ep.*, u.name, u.email, u.slug
+    FROM email_preferences ep
+    JOIN users u ON ep.user_id = u.id
+    WHERE ep.unsubscribe_token = ?
+  `).get(token);
+}
+
+export function getUsersDueForEmail(db, type) {
+  const intervalHours = type === 'weekly' ? 168 : 24;
+  return db.prepare(`
+    SELECT u.id, u.name, u.email, u.slug
+    FROM users u
+    JOIN email_preferences ep ON u.id = ep.user_id
+    WHERE ep.frequency = ?
+    AND u.email IS NOT NULL
+    AND (
+      ep.last_sent_at IS NULL
+      OR ep.last_sent_at < datetime('now', '-' || ? || ' hours')
+    )
+  `).all(type, intervalHours);
+}
+
+export function logEmail(db, userId, digestId) {
+  const result = db.prepare('INSERT INTO email_log (user_id, digest_id) VALUES (?, ?)').run(userId, digestId);
+  return result.lastInsertRowid;
+}
+
+export function updateEmailLog(db, logId, status, resendId, error) {
+  db.prepare('UPDATE email_log SET status = ?, resend_id = ?, error = ? WHERE id = ?').run(status, resendId || null, error || null, logId);
+}
+
+export function touchEmailSent(db, userId) {
+  db.prepare("UPDATE email_preferences SET last_sent_at = datetime('now') WHERE user_id = ?").run(userId);
 }
