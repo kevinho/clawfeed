@@ -586,6 +586,130 @@ else
 fi
 
 # ═══════════════════════════════════════════
+# 19. Mark Enhancement (#12)
+# ═══════════════════════════════════════════
+echo ""
+echo "─── 19. Mark Enhancement ───"
+
+# Setup: create marks for Alice and Bob
+ME_MARK_A=$(curl -s -X POST "$API/marks" -H "$ALICE" -H "Content-Type: application/json" \
+  -d '{"url":"https://test.local/ai-research","title":"AI Research Paper","note":"interesting findings"}' \
+  | jq_val "d.get('id','')")
+ME_MARK_B=$(curl -s -X POST "$API/marks" -H "$BOB" -H "Content-Type: application/json" \
+  -d '{"url":"https://test.local/bob-article","title":"Bob Article","note":"bob note"}' \
+  | jq_val "d.get('id','')")
+
+# 19.1 GET /api/marks/:id — get single mark
+if [ -n "$ME_MARK_A" ] && [ "$ME_MARK_A" != "None" ]; then
+  r=$(curl -s "$API/marks/$ME_MARK_A" -H "$ALICE")
+  check "19.1 Get single mark" 'AI Research Paper' "$r"
+
+  # 19.2 GET /api/marks/:id — other user → 404
+  r=$(curl -s -o /dev/null -w '%{http_code}' "$API/marks/$ME_MARK_A" -H "$BOB")
+  check_code "19.2 Other user cannot see mark → 404" "404" "$r"
+
+  # 19.3 GET /api/marks/:id — no auth → 401
+  check_code "19.3 No auth → 401" "401" \
+    "$(curl -s -o /dev/null -w '%{http_code}' "$API/marks/$ME_MARK_A")"
+
+  # 19.4 POST /api/marks/:id/analyze — LLM analysis
+  r=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/marks/$ME_MARK_A/analyze" -H "$ALICE")
+  if [ "$r" = "503" ]; then
+    TOTAL=$((TOTAL+1)); PASS=$((PASS+1)); SKIP=$((SKIP+1))
+    printf "  ⏭️  19.4 Mark analyze → 503 (LLM not configured, skipped)\n"
+  elif [ "$r" = "200" ]; then
+    r2=$(curl -s -X POST "$API/marks/$ME_MARK_A/analyze" -H "$ALICE")
+    check "19.4 Mark analyze → has analysis" '"analysis"' "$r2"
+    check "19.4b Mark analyze → has tags" '"tags"' "$r2"
+  else
+    TOTAL=$((TOTAL+1)); FAIL=$((FAIL+1))
+    printf "  ❌ 19.4 Mark analyze → unexpected %s\n" "$r"
+  fi
+
+  # 19.5 POST /api/marks/:id/share — create share link
+  r=$(curl -s -X POST "$API/marks/$ME_MARK_A/share" -H "$ALICE")
+  check "19.5 Create share link" '"share_token"' "$r"
+  SHARE_TOKEN=$(echo "$r" | python3 -c "import sys,json; d=json.load(sys.stdin); print(d.get('share_token',''))" 2>/dev/null || echo "")
+
+  # 19.6 GET shared mark (public, no auth)
+  if [ -n "$SHARE_TOKEN" ]; then
+    r=$(curl -s "$API/marks/shared/$SHARE_TOKEN")
+    check "19.6 Public shared mark accessible" 'AI Research Paper' "$r"
+    # Should NOT contain user_id
+    check_not "19.6b Shared mark hides user_id" '"user_id"' "$r"
+    check "19.6c Shared mark has shared_by" '"shared_by"' "$r"
+  else
+    TOTAL=$((TOTAL+3)); SKIP=$((SKIP+3))
+    echo "  ⏭️  19.6 Skipped (no share token)"
+  fi
+
+  # 19.7 Re-share same mark → same token (idempotent)
+  r=$(curl -s -X POST "$API/marks/$ME_MARK_A/share" -H "$ALICE")
+  if [ -n "$SHARE_TOKEN" ]; then
+    check "19.7 Re-share returns same token" "$SHARE_TOKEN" "$r"
+  else
+    TOTAL=$((TOTAL+1)); SKIP=$((SKIP+1))
+    echo "  ⏭️  19.7 Skipped (no token)"
+  fi
+
+  # 19.8 DELETE /api/marks/:id/share — revoke share
+  r=$(curl -s -X DELETE "$API/marks/$ME_MARK_A/share" -H "$ALICE")
+  check "19.8 Revoke share" '"ok":true' "$r"
+
+  # 19.9 Shared link no longer works after revoke
+  if [ -n "$SHARE_TOKEN" ]; then
+    r=$(curl -s -o /dev/null -w '%{http_code}' "$API/marks/shared/$SHARE_TOKEN")
+    check_code "19.9 Revoked share → 404" "404" "$r"
+  else
+    TOTAL=$((TOTAL+1)); SKIP=$((SKIP+1))
+    echo "  ⏭️  19.9 Skipped (no token)"
+  fi
+
+  # 19.10 Bob cannot share Alice's mark
+  r=$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/marks/$ME_MARK_A/share" -H "$BOB")
+  check_code "19.10 Bob cannot share Alice's mark → 404" "404" "$r"
+else
+  echo "  ⏭️  19.1-19.10 Skipped (no mark ID)"
+  SKIP=$((SKIP+10))
+  TOTAL=$((TOTAL+10))
+fi
+
+# 19.11 GET /api/marks/export — markdown format
+r=$(curl -s -o /dev/null -w '%{http_code}' "$API/marks/export" -H "$ALICE")
+if [ "$r" = "200" ]; then
+  r2=$(curl -s "$API/marks/export" -H "$ALICE")
+  check "19.11 Export markdown contains header" 'ClawFeed Bookmarks' "$r2"
+else
+  check_code "19.11 Export endpoint accessible" "200" "$r"
+fi
+
+# 19.12 Export as JSON
+r=$(curl -s "$API/marks/export?format=json" -H "$ALICE")
+check "19.12 Export JSON is array" '[' "$r"
+
+# 19.13 Export without auth → 401
+check_code "19.13 Export no auth → 401" "401" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "$API/marks/export")"
+
+# 19.14 GET /api/marks/shared with invalid token → 404
+check_code "19.14 Invalid share token → 404" "404" \
+  "$(curl -s -o /dev/null -w '%{http_code}' "$API/marks/shared/00000000000000000000000000000000")"
+
+# 19.15 Analyze without auth → 401
+if [ -n "$ME_MARK_A" ] && [ "$ME_MARK_A" != "None" ]; then
+  check_code "19.15 Analyze no auth → 401" "401" \
+    "$(curl -s -o /dev/null -w '%{http_code}' -X POST "$API/marks/$ME_MARK_A/analyze")"
+fi
+
+# Cleanup
+if [ -n "$ME_MARK_A" ] && [ "$ME_MARK_A" != "None" ]; then
+  curl -s -X DELETE "$API/marks/$ME_MARK_A" -H "$ALICE" > /dev/null
+fi
+if [ -n "$ME_MARK_B" ] && [ "$ME_MARK_B" != "None" ]; then
+  curl -s -X DELETE "$API/marks/$ME_MARK_B" -H "$BOB" > /dev/null
+fi
+
+# ═══════════════════════════════════════════
 # RESULTS
 # ═══════════════════════════════════════════
 echo ""

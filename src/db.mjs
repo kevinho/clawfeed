@@ -147,6 +147,17 @@ export function getDb(dbPath) {
   } catch (e) {
     if (!e.message.includes('already exists')) console.error('Migration 013:', e.message);
   }
+  // Migration 014: Mark enhancement (#12)
+  try {
+    const sql14 = readFileSync(join(ROOT, 'migrations', '014_mark_enhancement.sql'), 'utf8');
+    for (const stmt of sql14.split(';').map(s => s.trim()).filter(Boolean)) {
+      try { _db.exec(stmt + ';'); } catch (e) {
+        if (!e.message.includes('already exists') && !e.message.includes('duplicate column')) throw e;
+      }
+    }
+  } catch (e) {
+    if (!e.message.includes('already exists') && !e.message.includes('duplicate column')) console.error('Migration 014:', e.message);
+  }
   // Backfill slugs for existing users
   _backfillSlugs(_db);
   return _db;
@@ -229,6 +240,51 @@ export function migrateMarksToUser(db, userId) {
 
 export function updateMarkStatus(db, id, status) {
   return db.prepare('UPDATE marks SET status = ? WHERE id = ?').run(status, id);
+}
+
+export function getMark(db, id, userId) {
+  return db.prepare('SELECT * FROM marks WHERE id = ? AND user_id = ?').get(id, userId);
+}
+
+export function updateMarkAnalysis(db, id, analysis, tags = '[]') {
+  return db.prepare(
+    'UPDATE marks SET analysis = ?, tags = ?, analyzed_at = datetime(\'now\'), status = \'processed\' WHERE id = ?'
+  ).run(analysis, tags, id);
+}
+
+export function setMarkShareToken(db, id, token) {
+  return db.prepare('UPDATE marks SET share_token = ? WHERE id = ?').run(token, id);
+}
+
+export function getMarkByShareToken(db, token) {
+  return db.prepare(
+    `SELECT m.*, u.name as user_name FROM marks m
+     LEFT JOIN users u ON m.user_id = u.id
+     WHERE m.share_token = ?`
+  ).get(token);
+}
+
+export function revokeMarkShare(db, id, userId) {
+  return db.prepare('UPDATE marks SET share_token = NULL WHERE id = ? AND user_id = ?').run(id, userId);
+}
+
+export function listMarksForExport(db, userId, { status, since, until } = {}) {
+  let sql = 'SELECT * FROM marks WHERE user_id = ?';
+  const params = [userId];
+  if (status) { sql += ' AND status = ?'; params.push(status); }
+  if (since) { sql += ' AND created_at >= ?'; params.push(since); }
+  if (until) { sql += ' AND created_at <= ?'; params.push(until); }
+  sql += ' ORDER BY created_at DESC';
+  return db.prepare(sql).all(...params);
+}
+
+export function getUserMarkTopics(db, userId, limit = 20) {
+  // Get recent marks with tags for preference analysis
+  return db.prepare(
+    `SELECT tags, title, note, url FROM marks
+     WHERE user_id = ? AND tags != '[]' AND tags IS NOT NULL
+     ORDER BY created_at DESC LIMIT ?`
+  ).all(userId, limit);
 }
 
 // ── Auth ──

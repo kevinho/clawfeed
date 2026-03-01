@@ -29,6 +29,7 @@ import {
   createDigest,
   listSources,
   getUsersWithTelegramForDigest,
+  getUserMarkTopics,
 } from './db.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -189,10 +190,28 @@ async function generateForUser(db, userId, userName, type, dryRun) {
   const now = new Date();
   const dateStr = now.toLocaleDateString('en-SG', { timeZone: 'Asia/Singapore' });
   const timeStr = now.toLocaleTimeString('en-SG', { timeZone: 'Asia/Singapore', hour: '2-digit', minute: '2-digit', hour12: false });
-  const systemPrompt = promptTemplate
+  let systemPrompt = promptTemplate
     .replace('{{date}}', dateStr)
     .replace('{{time}}', timeStr)
     .replace('{{timezone}}', 'SGT');
+
+  // Inject user's bookmark preferences if available (#12)
+  try {
+    const markTopics = getUserMarkTopics(db, userId, 20);
+    if (markTopics.length) {
+      const allTags = new Set();
+      for (const m of markTopics) {
+        try {
+          const tags = JSON.parse(m.tags || '[]');
+          tags.forEach(t => allTags.add(t));
+        } catch {}
+      }
+      if (allTags.size) {
+        systemPrompt += `\n\nUser interest signals (from bookmarks): ${[...allTags].join(', ')}. Prioritize items related to these topics when selecting content.`;
+        console.log(`  [prefs] ${userName || userId}: ${allTags.size} topic tags from ${markTopics.length} bookmarks`);
+      }
+    }
+  } catch {}
 
   const userContent = `Generate a ${type} digest from the following ${items.length} items:\n\n${formatItemsForLlm(items)}`;
 

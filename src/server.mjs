@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime, getEmailPreference, upsertEmailPreference, getEmailPrefByToken, getTelegramLink, consumeLinkCode, saveTelegramLink, removeTelegramLink, updateTelegramPrefs } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime, getEmailPreference, upsertEmailPreference, getEmailPrefByToken, getTelegramLink, consumeLinkCode, saveTelegramLink, removeTelegramLink, updateTelegramPrefs, getMark, updateMarkAnalysis, setMarkShareToken, getMarkByShareToken, revokeMarkShare, listMarksForExport, getUserMarkTopics } from './db.mjs';
 import { fork } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -46,6 +46,46 @@ const db = getDb(DB_PATH);
 
 // Chat rate limiting (in-memory, per user)
 const chatRateLimit = new Map();
+
+// ── Shared LLM helper ──
+function callLlmApi(messages, { maxTokens = 1024, temperature = 0.3 } = {}) {
+  return new Promise((resolve, reject) => {
+    if (!LLM_API_KEY) return reject(new Error('LLM not configured'));
+    const url = new URL(LLM_API_URL);
+    const payload = JSON.stringify({
+      model: LLM_MODEL,
+      messages,
+      max_tokens: maxTokens,
+      temperature,
+    });
+    const mod = url.protocol === 'https:' ? https : http;
+    const llmReq = mod.request(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${LLM_API_KEY}`,
+        'Content-Length': Buffer.byteLength(payload),
+      },
+    }, (resp) => {
+      let data = '';
+      const MAX_RESP = 64 * 1024;
+      resp.on('data', c => { data += c; if (data.length > MAX_RESP) { resp.destroy(); reject(new Error('response too large')); } });
+      resp.on('end', () => {
+        clearTimeout(timer);
+        try {
+          const j = JSON.parse(data);
+          if (resp.statusCode !== 200) return reject(new Error(j.error?.message || 'LLM error'));
+          resolve(j.choices?.[0]?.message?.content || '');
+        } catch (e) { reject(e); }
+      });
+    });
+    const timer = setTimeout(() => { llmReq.destroy(); reject(new Error('timeout')); }, LLM_TIMEOUT);
+    llmReq.on('error', e => { clearTimeout(timer); reject(e); });
+    llmReq.on('close', () => clearTimeout(timer));
+    llmReq.write(payload);
+    llmReq.end();
+  });
+}
 
 function json(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -609,6 +649,144 @@ const server = createServer(async (req, res) => {
         target: m.url, at: m.created_at, title: m.title || '',
       }));
       return json(res, { tweets: marks.filter(m => m.status === 'pending').map(m => ({ url: m.url, markedAt: m.created_at })), history });
+    }
+
+    // ── Mark Enhancement endpoints (#12) ──
+
+    // GET /api/marks/:id — get single mark with analysis
+    const markGetMatch = path.match(/^\/api\/marks\/(\d+)$/);
+    if (req.method === 'GET' && markGetMatch) {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const mark = getMark(db, parseInt(markGetMatch[1]), req.user.id);
+      if (!mark) return json(res, { error: 'mark not found' }, 404);
+      return json(res, mark);
+    }
+
+    // POST /api/marks/:id/analyze — trigger AI analysis for a mark
+    const markAnalyzeMatch = path.match(/^\/api\/marks\/(\d+)\/analyze$/);
+    if (req.method === 'POST' && markAnalyzeMatch) {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      if (!LLM_API_KEY) return json(res, { error: 'analysis not configured' }, 503);
+      const markId = parseInt(markAnalyzeMatch[1]);
+      const mark = getMark(db, markId, req.user.id);
+      if (!mark) return json(res, { error: 'mark not found' }, 404);
+
+      try {
+        const analysisPrompt = `Analyze this bookmarked article and provide a structured analysis.
+
+Title: ${(mark.title || '').slice(0, 200)}
+URL: ${(mark.url || '').slice(0, 500)}
+User note: ${(mark.note || '').slice(0, 500)}
+
+Provide:
+1. **Summary** — 2-3 sentence overview of the content based on the title and URL
+2. **Key Topics** — list 3-5 topic tags (single words or short phrases, lowercase)
+3. **Why It Matters** — brief explanation of significance/relevance
+4. **Related Topics** — 2-3 related areas worth exploring
+
+Format the analysis in clear markdown. Return the topic tags as a JSON array on a separate line prefixed with "TAGS:" (e.g., TAGS: ["ai", "machine-learning", "research"])`;
+
+        const result = await callLlmApi([
+          { role: 'system', content: 'You are a knowledgeable content analyst. Provide concise, insightful analysis.' },
+          { role: 'user', content: analysisPrompt },
+        ], { maxTokens: 1024, temperature: 0.3 });
+
+        // Extract tags from response
+        let tags = '[]';
+        const tagMatch = result.match(/TAGS:\s*(\[.*?\])/);
+        if (tagMatch) {
+          try { tags = JSON.stringify(JSON.parse(tagMatch[1])); } catch {}
+        }
+        const analysis = result.replace(/TAGS:\s*\[.*?\]/, '').trim();
+
+        updateMarkAnalysis(db, markId, analysis, tags);
+        const updated = getMark(db, markId, req.user.id);
+        return json(res, updated);
+      } catch (e) {
+        console.error('Mark analysis error:', e.message);
+        return json(res, { error: 'Analysis failed' }, 502);
+      }
+    }
+
+    // POST /api/marks/:id/share — generate share link
+    const markShareMatch = path.match(/^\/api\/marks\/(\d+)\/share$/);
+    if (req.method === 'POST' && markShareMatch) {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const markId = parseInt(markShareMatch[1]);
+      const mark = getMark(db, markId, req.user.id);
+      if (!mark) return json(res, { error: 'mark not found' }, 404);
+
+      if (mark.share_token) {
+        return json(res, { share_token: mark.share_token, url: `/api/marks/shared/${mark.share_token}` });
+      }
+
+      const token = randomBytes(16).toString('hex');
+      setMarkShareToken(db, markId, token);
+      return json(res, { share_token: token, url: `/api/marks/shared/${token}` });
+    }
+
+    // DELETE /api/marks/:id/share — revoke share link
+    const markUnshareMatch = path.match(/^\/api\/marks\/(\d+)\/share$/);
+    if (req.method === 'DELETE' && markUnshareMatch) {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const markId = parseInt(markUnshareMatch[1]);
+      revokeMarkShare(db, markId, req.user.id);
+      return json(res, { ok: true });
+    }
+
+    // GET /api/marks/shared/:token — public access to shared mark
+    const sharedMarkMatch = path.match(/^\/api\/marks\/shared\/([a-f0-9]{32})$/);
+    if (req.method === 'GET' && sharedMarkMatch) {
+      const mark = getMarkByShareToken(db, sharedMarkMatch[1]);
+      if (!mark) return json(res, { error: 'not found' }, 404);
+      // Return only safe fields (no user_id, no internal IDs)
+      return json(res, {
+        title: mark.title,
+        url: mark.url,
+        note: mark.note,
+        analysis: mark.analysis,
+        tags: mark.tags,
+        shared_by: mark.user_name || 'Anonymous',
+        created_at: mark.created_at,
+        analyzed_at: mark.analyzed_at,
+      });
+    }
+
+    // GET /api/marks/export — export marks as markdown
+    if (req.method === 'GET' && path === '/api/marks/export') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const format = params.get('format') || 'markdown';
+      const status = params.get('status') || undefined;
+      const since = params.get('since') || undefined;
+      const until = params.get('until') || undefined;
+      const marks = listMarksForExport(db, req.user.id, { status, since, until });
+
+      if (format === 'json') {
+        return json(res, marks);
+      }
+
+      // Default: markdown
+      let md = `# ClawFeed Bookmarks\n\nExported: ${new Date().toISOString()}\nTotal: ${marks.length} items\n\n---\n\n`;
+      for (const m of marks) {
+        md += `## ${m.title || '(untitled)'}\n\n`;
+        md += `- **URL:** ${m.url}\n`;
+        md += `- **Saved:** ${m.created_at}\n`;
+        if (m.note) md += `- **Note:** ${m.note}\n`;
+        if (m.tags && m.tags !== '[]') {
+          try {
+            const tags = JSON.parse(m.tags);
+            if (tags.length) md += `- **Tags:** ${tags.join(', ')}\n`;
+          } catch {}
+        }
+        if (m.analysis) md += `\n### Analysis\n\n${m.analysis}\n`;
+        md += '\n---\n\n';
+      }
+
+      res.writeHead(200, {
+        'Content-Type': 'text/markdown; charset=utf-8',
+        'Content-Disposition': `attachment; filename="clawfeed-bookmarks-${new Date().toISOString().slice(0, 10)}.md"`,
+      });
+      return res.end(md);
     }
 
     // ── Subscriptions endpoints ──
