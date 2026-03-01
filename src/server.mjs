@@ -35,8 +35,17 @@ const OAUTH_STATE_SECRET = env.OAUTH_STATE_SECRET || process.env.OAUTH_STATE_SEC
 const MAX_BODY_BYTES = 1024 * 1024;
 const DB_PATH = process.env.DIGEST_DB || join(ROOT, 'data', 'digest.db');
 
+// ── Chat (LLM) config ──
+const LLM_API_URL = process.env.LLM_API_URL || env.LLM_API_URL || 'https://api.openai.com/v1/chat/completions';
+const LLM_API_KEY = process.env.LLM_API_KEY || env.LLM_API_KEY || '';
+const LLM_MODEL = process.env.LLM_MODEL || env.LLM_MODEL || 'gpt-4o-mini';
+const LLM_TIMEOUT = parseInt(process.env.LLM_TIMEOUT || env.LLM_TIMEOUT || '90', 10) * 1000;
+
 mkdirSync(join(ROOT, 'data'), { recursive: true });
 const db = getDb(DB_PATH);
+
+// Chat rate limiting (in-memory, per user)
+const chatRateLimit = new Map();
 
 function json(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
@@ -933,6 +942,105 @@ const server = createServer(async (req, res) => {
       const body = await parseBody(req);
       for (const [k, v] of Object.entries(body)) setConfig(db, k, v);
       return json(res, { ok: true });
+    }
+
+    // ── Chat endpoint ──
+    if (req.method === 'POST' && path === '/api/chat') {
+      if (!LLM_API_KEY) return json(res, { error: 'chat not configured' }, 503);
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+
+      // Rate limit: max 20 requests per minute per user
+      const now = Date.now();
+      const userId = req.user.id;
+      if (!chatRateLimit.has(userId)) chatRateLimit.set(userId, []);
+      const timestamps = chatRateLimit.get(userId).filter(t => now - t < 60000);
+      if (timestamps.length >= 20) return json(res, { error: 'rate limit exceeded, try again later' }, 429);
+      timestamps.push(now);
+      chatRateLimit.set(userId, timestamps);
+
+      const body = await parseBody(req);
+      const { message, history, digest_id } = body;
+      if (!message || typeof message !== 'string') return json(res, { error: 'message required' }, 400);
+
+      // Get digest content for context
+      let digestContent = '';
+      if (digest_id && /^\d+$/.test(String(digest_id))) {
+        const d = getDigest(db, parseInt(digest_id));
+        if (d) digestContent = d.content;
+      }
+      if (!digestContent) {
+        // Fall back to latest digest
+        const userId = req.user?.id;
+        const digests = userId
+          ? listDigestsByUser(db, userId, { type: '4h', limit: 1 })
+          : listDigests(db, { type: '4h', limit: 1, offset: 0 });
+        if (digests.length) digestContent = digests[0].content;
+      }
+
+      const systemPrompt = `You are ClawFeed AI Assistant, a helpful news analysis companion. You help users understand, explore, and discuss the content from their news digest.
+
+${digestContent ? `Here is the current digest content for context:\n\n${digestContent.slice(0, 6000)}` : 'No digest content is currently available.'}
+
+Guidelines:
+- Answer questions about the digest content accurately
+- Provide deeper analysis when asked (background, implications, related topics)
+- If asked about topics not in the digest, say so but offer what you can
+- Be concise but informative
+- Respond in the same language the user writes in`;
+
+      // Build messages array with history
+      const messages = [{ role: 'system', content: systemPrompt }];
+      if (Array.isArray(history)) {
+        for (const h of history.slice(-10)) {
+          if (h.role === 'user' || h.role === 'assistant') {
+            messages.push({ role: h.role, content: String(h.content).slice(0, 2000) });
+          }
+        }
+      }
+      messages.push({ role: 'user', content: message.slice(0, 2000) });
+
+      // Call LLM
+      try {
+        const reply = await new Promise((resolve, reject) => {
+          const url = new URL(LLM_API_URL);
+          const payload = JSON.stringify({
+            model: LLM_MODEL,
+            messages,
+            max_tokens: 1024,
+            temperature: 0.5,
+          });
+          const mod = url.protocol === 'https:' ? https : http;
+          const llmReq = mod.request(url, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${LLM_API_KEY}`,
+              'Content-Length': Buffer.byteLength(payload),
+            },
+          }, (resp) => {
+            let data = '';
+            const MAX_RESP = 64 * 1024; // 64KB max LLM response
+            resp.on('data', c => { data += c; if (data.length > MAX_RESP) { resp.destroy(); reject(new Error('response too large')); } });
+            resp.on('end', () => {
+              clearTimeout(timer);
+              try {
+                const j = JSON.parse(data);
+                if (resp.statusCode !== 200) return reject(new Error(j.error?.message || 'LLM error'));
+                resolve(j.choices?.[0]?.message?.content?.slice(0, 8000) || '');
+              } catch (e) { reject(e); }
+            });
+          });
+          const timer = setTimeout(() => { llmReq.destroy(); reject(new Error('timeout')); }, LLM_TIMEOUT);
+          llmReq.on('error', e => { clearTimeout(timer); reject(e); });
+          llmReq.on('close', () => clearTimeout(timer));
+          llmReq.write(payload);
+          llmReq.end();
+        });
+        return json(res, { reply });
+      } catch (e) {
+        console.error('Chat LLM error:', e.message);
+        return json(res, { error: 'Failed to get response' }, 502);
+      }
     }
 
     // ── Email preferences endpoints ──

@@ -185,6 +185,41 @@
   .pack-detail-source .info { flex: 1; }
   .pack-detail-source .info .name { font-size: 14px; font-weight: 500; }
   .pack-detail-source .info .type { font-size: 11px; color: #666; }
+  /* Chat Widget */
+  .chat-bubble { position: fixed; bottom: 24px; right: 24px; width: 52px; height: 52px; border-radius: 50%; background: linear-gradient(135deg, #6366f1, #8b5cf6); border: none; cursor: pointer; z-index: 900; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 16px rgba(99,102,241,.4); transition: transform .2s, box-shadow .2s; }
+  .chat-bubble:hover { transform: scale(1.08); box-shadow: 0 6px 20px rgba(99,102,241,.5); }
+  .chat-bubble svg { width: 24px; height: 24px; fill: #fff; }
+  .chat-box { position: fixed; bottom: 88px; right: 24px; width: 380px; max-height: 520px; background: #1a1a1a; border: 1px solid #333; border-radius: 16px; z-index: 901; display: none; flex-direction: column; box-shadow: 0 8px 32px rgba(0,0,0,.5); overflow: hidden; }
+  .chat-box.open { display: flex; }
+  .chat-header { padding: 14px 16px; border-bottom: 1px solid #282828; display: flex; justify-content: space-between; align-items: center; }
+  .chat-header .chat-title { font-size: 14px; font-weight: 600; color: #e0e0e0; }
+  .chat-header .chat-close { background: none; border: none; color: #666; font-size: 20px; cursor: pointer; padding: 0 4px; line-height: 1; }
+  .chat-header .chat-close:hover { color: #ccc; }
+  .chat-messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; min-height: 200px; max-height: 360px; }
+  .chat-msg { max-width: 85%; padding: 10px 14px; border-radius: 12px; font-size: 13px; line-height: 1.6; word-break: break-word; white-space: pre-wrap; }
+  .chat-msg.user { align-self: flex-end; background: #6366f1; color: #fff; border-bottom-right-radius: 4px; }
+  .chat-msg.assistant { align-self: flex-start; background: #2a2a2a; color: #e0e0e0; border-bottom-left-radius: 4px; }
+  .chat-msg.assistant a { color: #58a6ff; }
+  .chat-msg.typing { color: #888; font-style: italic; }
+  .chat-input-row { padding: 12px; border-top: 1px solid #282828; display: flex; gap: 8px; }
+  .chat-input-row input { flex: 1; padding: 10px 14px; background: #0f0f0f; border: 1px solid #333; border-radius: 10px; color: #e0e0e0; font-size: 13px; outline: none; }
+  .chat-input-row input:focus { border-color: #6366f1; }
+  .chat-input-row button { padding: 8px 14px; background: #6366f1; border: none; border-radius: 10px; color: #fff; cursor: pointer; font-size: 14px; transition: background .2s; }
+  .chat-input-row button:hover { background: #5558e6; }
+  .chat-input-row button:disabled { background: #333; cursor: not-allowed; }
+  body.light .chat-box { background: #fff; border-color: #ddd; box-shadow: 0 8px 32px rgba(0,0,0,.15); }
+  body.light .chat-header { border-color: #eee; }
+  body.light .chat-header .chat-title { color: #333; }
+  body.light .chat-header .chat-close { color: #999; }
+  body.light .chat-header .chat-close:hover { color: #333; }
+  body.light .chat-messages { }
+  body.light .chat-msg.assistant { background: #f0f0f0; color: #333; }
+  body.light .chat-input-row { border-color: #eee; }
+  body.light .chat-input-row input { background: #f5f5f5; border-color: #ddd; color: #333; }
+  @media (max-width: 480px) {
+    .chat-box { right: 8px; left: 8px; width: auto; bottom: 80px; max-height: 70vh; }
+    .chat-bubble { bottom: 16px; right: 16px; width: 48px; height: 48px; }
+  }
 </style>
 </head>
 <body>
@@ -220,6 +255,24 @@
 <div class="changelog-overlay" id="changelogOverlay">
   <button class="changelog-close" onclick="hideChangelog()">✕</button>
   <div class="changelog-inner" id="changelogContent"></div>
+</div>
+
+<!-- Chat Widget -->
+<button class="chat-bubble" id="chatBubble" onclick="toggleChat()" title="AI Assistant">
+  <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm0 14H5.2L4 17.2V4h16v12z"/><path d="M7 9h2v2H7zm4 0h2v2h-2zm4 0h2v2h-2z"/></svg>
+</button>
+<div class="chat-box" id="chatBox">
+  <div class="chat-header">
+    <span class="chat-title">AI Assistant</span>
+    <button class="chat-close" onclick="toggleChat()">✕</button>
+  </div>
+  <div class="chat-messages" id="chatMessages">
+    <div class="chat-msg assistant">Hi! Ask me anything about your news digest. I can explain articles, provide background, or help you explore topics.</div>
+  </div>
+  <div class="chat-input-row">
+    <input type="text" id="chatInput" placeholder="Ask about the digest..." onkeydown="if(event.key==='Enter')sendChat()">
+    <button id="chatSend" onclick="sendChat()">&#9654;</button>
+  </div>
 </div>
 
 <script>
@@ -671,6 +724,7 @@ async function renderList(append = false) {
   const list = document.getElementById('list');
   const viewer = document.getElementById('viewer');
   viewer.style.display = 'none';
+  if (typeof chatDigestId !== 'undefined') chatDigestId = null;
 
   if (currentType === 'marks') { renderMarks(); return; }
   if (currentType === 'sources') { renderSources(); return; }
@@ -771,6 +825,8 @@ async function loadDigest(id) {
     text = text.replace(/(https?:\/\/(?!x\.com)[^\s<)]+)/g, '<a href="$1" target="_blank">$1</a>');
 
     viewer.innerHTML = `<div class="back-btn" onclick="renderList()">${t('back')}</div>\n${text}`;
+    viewer.dataset.digestId = id;
+    chatDigestId = id;
     viewer.style.display = 'block';
   } catch (e) {
     viewer.innerHTML = `<div class="back-btn" onclick="renderList()">${t('back')}</div>\n<div class="empty">${t('cantLoad')}</div>`;
@@ -1752,6 +1808,99 @@ checkAuth().then(() => {
     renderList();
   }
 });
+
+// ── Chat Widget ──
+const chatHistory = JSON.parse(sessionStorage.getItem('cf_chat') || '[]');
+let chatDigestId = null;
+let chatBusy = false;
+
+function toggleChat() {
+  const box = document.getElementById('chatBox');
+  box.classList.toggle('open');
+  if (box.classList.contains('open')) {
+    document.getElementById('chatInput').focus();
+    // Track which digest is being viewed
+    const viewer = document.getElementById('viewer');
+    if (viewer.style.display !== 'none' && viewer.dataset.digestId) {
+      chatDigestId = viewer.dataset.digestId;
+    }
+  }
+}
+
+function renderChatHistory() {
+  const msgs = document.getElementById('chatMessages');
+  msgs.innerHTML = '<div class="chat-msg assistant">' + (lang === 'zh'
+    ? 'Hi! 问我任何关于新闻摘要的问题。我可以解读文章、提供背景分析，或帮你深入探索话题。'
+    : 'Hi! Ask me anything about your news digest. I can explain articles, provide background, or help you explore topics.') + '</div>';
+  for (const h of chatHistory) {
+    const safeRole = h.role === 'user' ? 'user' : 'assistant';
+    msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg ' + safeRole + '">' + escHtml(h.content) + '</div>');
+  }
+  msgs.scrollTop = msgs.scrollHeight;
+}
+
+function escHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\n/g, '<br>')
+    .replace(/\[([^\]]+)\]\((https?:\/\/[^)]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+}
+
+async function sendChat() {
+  if (chatBusy) return;
+  const input = document.getElementById('chatInput');
+  const msg = input.value.trim();
+  if (!msg) return;
+
+  input.value = '';
+  chatBusy = true;
+  document.getElementById('chatSend').disabled = true;
+
+  // Show user message
+  const msgs = document.getElementById('chatMessages');
+  chatHistory.push({ role: 'user', content: msg });
+  msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg user">' + escHtml(msg) + '</div>');
+
+  // Show typing indicator
+  msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant typing" id="chatTyping">...</div>');
+  msgs.scrollTop = msgs.scrollHeight;
+
+  try {
+    const resp = await fetch(API + '/chat', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({
+        message: msg,
+        history: chatHistory.slice(0, -1),
+        digest_id: chatDigestId,
+      }),
+    });
+    const data = await resp.json();
+    const typing = document.getElementById('chatTyping');
+    if (typing) typing.remove();
+
+    if (data.reply) {
+      chatHistory.push({ role: 'assistant', content: data.reply });
+      msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant">' + escHtml(data.reply) + '</div>');
+    } else {
+      msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant">' + escHtml(data.error || 'Sorry, something went wrong.') + '</div>');
+    }
+  } catch (e) {
+    const typing = document.getElementById('chatTyping');
+    if (typing) typing.remove();
+    chatHistory.pop(); // Remove failed user message from history
+    msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant">Connection error. Please try again.</div>');
+  }
+
+  msgs.scrollTop = msgs.scrollHeight;
+  sessionStorage.setItem('cf_chat', JSON.stringify(chatHistory.slice(-20)));
+  chatBusy = false;
+  document.getElementById('chatSend').disabled = false;
+  input.focus();
+}
+
+// Restore chat history on load
+if (chatHistory.length) renderChatHistory();
 
 // ClawMark — only on staging
 if (location.pathname.startsWith('/staging/')) {
