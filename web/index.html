@@ -724,6 +724,7 @@ async function renderList(append = false) {
   const list = document.getElementById('list');
   const viewer = document.getElementById('viewer');
   viewer.style.display = 'none';
+  if (typeof chatDigestId !== 'undefined') chatDigestId = null;
 
   if (currentType === 'marks') { renderMarks(); return; }
   if (currentType === 'sources') { renderSources(); return; }
@@ -1832,7 +1833,8 @@ function renderChatHistory() {
     ? 'Hi! 问我任何关于新闻摘要的问题。我可以解读文章、提供背景分析，或帮你深入探索话题。'
     : 'Hi! Ask me anything about your news digest. I can explain articles, provide background, or help you explore topics.') + '</div>';
   for (const h of chatHistory) {
-    msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg ' + h.role + '">' + escHtml(h.content) + '</div>');
+    const safeRole = h.role === 'user' ? 'user' : 'assistant';
+    msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg ' + safeRole + '">' + escHtml(h.content) + '</div>');
   }
   msgs.scrollTop = msgs.scrollHeight;
 }
@@ -1881,11 +1883,12 @@ async function sendChat() {
       chatHistory.push({ role: 'assistant', content: data.reply });
       msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant">' + escHtml(data.reply) + '</div>');
     } else {
-      msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant">' + (data.error || 'Sorry, something went wrong.') + '</div>');
+      msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant">' + escHtml(data.error || 'Sorry, something went wrong.') + '</div>');
     }
   } catch (e) {
     const typing = document.getElementById('chatTyping');
     if (typing) typing.remove();
+    chatHistory.pop(); // Remove failed user message from history
     msgs.insertAdjacentHTML('beforeend', '<div class="chat-msg assistant">Connection error. Please try again.</div>');
   }
 

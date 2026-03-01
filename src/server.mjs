@@ -44,6 +44,9 @@ const LLM_TIMEOUT = parseInt(process.env.LLM_TIMEOUT || env.LLM_TIMEOUT || '90',
 mkdirSync(join(ROOT, 'data'), { recursive: true });
 const db = getDb(DB_PATH);
 
+// Chat rate limiting (in-memory, per user)
+const chatRateLimit = new Map();
+
 function json(res, data, status = 200) {
   res.writeHead(status, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
@@ -944,13 +947,24 @@ const server = createServer(async (req, res) => {
     // ── Chat endpoint ──
     if (req.method === 'POST' && path === '/api/chat') {
       if (!LLM_API_KEY) return json(res, { error: 'chat not configured' }, 503);
+      if (!req.user) return json(res, { error: 'login required' }, 401);
+
+      // Rate limit: max 20 requests per minute per user
+      const now = Date.now();
+      const userId = req.user.id;
+      if (!chatRateLimit.has(userId)) chatRateLimit.set(userId, []);
+      const timestamps = chatRateLimit.get(userId).filter(t => now - t < 60000);
+      if (timestamps.length >= 20) return json(res, { error: 'rate limit exceeded, try again later' }, 429);
+      timestamps.push(now);
+      chatRateLimit.set(userId, timestamps);
+
       const body = await parseBody(req);
       const { message, history, digest_id } = body;
       if (!message || typeof message !== 'string') return json(res, { error: 'message required' }, 400);
 
       // Get digest content for context
       let digestContent = '';
-      if (digest_id) {
+      if (digest_id && /^\d+$/.test(String(digest_id))) {
         const d = getDigest(db, parseInt(digest_id));
         if (d) digestContent = d.content;
       }
@@ -1005,13 +1019,14 @@ Guidelines:
             },
           }, (resp) => {
             let data = '';
-            resp.on('data', c => { data += c; });
+            const MAX_RESP = 64 * 1024; // 64KB max LLM response
+            resp.on('data', c => { data += c; if (data.length > MAX_RESP) { resp.destroy(); reject(new Error('response too large')); } });
             resp.on('end', () => {
               clearTimeout(timer);
               try {
                 const j = JSON.parse(data);
                 if (resp.statusCode !== 200) return reject(new Error(j.error?.message || 'LLM error'));
-                resolve(j.choices?.[0]?.message?.content || '');
+                resolve(j.choices?.[0]?.message?.content?.slice(0, 8000) || '');
               } catch (e) { reject(e); }
             });
           });
