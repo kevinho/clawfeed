@@ -7,7 +7,7 @@ import { fileURLToPath } from 'url';
 import { randomBytes, createHmac, timingSafeEqual } from 'crypto';
 import { lookup } from 'dns/promises';
 import { isIP } from 'net';
-import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime, getTelegramLink, consumeLinkCode, saveTelegramLink, removeTelegramLink, updateTelegramPrefs } from './db.mjs';
+import { getDb, listDigests, getDigest, createDigest, listMarks, createMark, deleteMark, getConfig, setConfig, upsertUser, createSession, getSession, deleteSession, listSources, getSource, createSource, updateSource, deleteSource, getSourceByTypeConfig, getUserBySlug, listDigestsByUser, countDigestsByUser, createPack, getPack, getPackBySlug, listPacks, incrementPackInstall, deletePack, listSubscriptions, subscribe, unsubscribe, bulkSubscribe, isSubscribed, createFeedback, getUserFeedback, getAllFeedback, replyToFeedback, updateFeedbackStatus, markFeedbackRead, getUnreadFeedbackCount, listRawItems, getRawItemStats, listRawItemsForDigest, getCollectorStatus, getActiveSubscriptionSourceIds, getLastDigestTime, getEmailPreference, upsertEmailPreference, getEmailPrefByToken, getTelegramLink, consumeLinkCode, saveTelegramLink, removeTelegramLink, updateTelegramPrefs } from './db.mjs';
 import { fork } from 'child_process';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -933,6 +933,58 @@ const server = createServer(async (req, res) => {
       const body = await parseBody(req);
       for (const [k, v] of Object.entries(body)) setConfig(db, k, v);
       return json(res, { ok: true });
+    }
+
+    // ── Email preferences endpoints ──
+
+    // GET /api/email/preferences — get current user's email pref
+    if (req.method === 'GET' && path === '/api/email/preferences') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const pref = getEmailPreference(db, req.user.id);
+      return json(res, pref ? { frequency: pref.frequency, last_sent_at: pref.last_sent_at } : { frequency: 'off', last_sent_at: null });
+    }
+
+    // PUT /api/email/preferences — update email frequency
+    if (req.method === 'PUT' && path === '/api/email/preferences') {
+      if (!req.user) return json(res, { error: 'not authenticated' }, 401);
+      const body = await parseBody(req);
+      const freq = body.frequency;
+      if (!['off', 'daily', 'weekly'].includes(freq)) {
+        return json(res, { error: 'frequency must be off, daily, or weekly' }, 400);
+      }
+      upsertEmailPreference(db, req.user.id, freq);
+      return json(res, { ok: true, frequency: freq });
+    }
+
+    // GET /api/email/unsubscribe?token=... — show confirmation page (safe from prefetchers)
+    if (req.method === 'GET' && path === '/api/email/unsubscribe') {
+      const token = params.get('token');
+      if (!token) return json(res, { error: 'token required' }, 400);
+      const pref = getEmailPrefByToken(db, token);
+      if (!pref) return json(res, { error: 'invalid token' }, 404);
+      // GET only shows confirmation — does NOT modify state (email client prefetchers issue)
+      const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribe</title><style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f4f4f7;}div{text-align:center;padding:40px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);max-width:400px;}button{padding:12px 32px;background:#e53e3e;color:#fff;border:none;border-radius:6px;font-size:16px;cursor:pointer;margin-top:16px;}button:hover{background:#c53030;}</style></head><body><div><h2>Unsubscribe from ClawFeed</h2><p>Click the button below to stop receiving email digests.</p><form method="POST" action="/api/email/unsubscribe?token=${encodeURIComponent(token)}"><button type="submit">Unsubscribe</button></form></div></body></html>`;
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(html);
+      return;
+    }
+
+    // POST /api/email/unsubscribe?token=... — execute unsubscribe
+    if (req.method === 'POST' && path === '/api/email/unsubscribe') {
+      const token = params.get('token');
+      if (!token) return json(res, { error: 'token required' }, 400);
+      const pref = getEmailPrefByToken(db, token);
+      if (!pref) return json(res, { error: 'invalid token' }, 404);
+      upsertEmailPreference(db, pref.user_id, 'off');
+      // Return success page for browser form submission
+      const acceptsHtml = (req.headers.accept || '').includes('text/html');
+      if (acceptsHtml) {
+        const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title><style>body{font-family:sans-serif;display:flex;justify-content:center;align-items:center;min-height:100vh;margin:0;background:#f4f4f7;}div{text-align:center;padding:40px;background:#fff;border-radius:12px;box-shadow:0 2px 8px rgba(0,0,0,0.08);max-width:400px;}</style></head><body><div><h2>Unsubscribed</h2><p>You've been unsubscribed from ClawFeed email digests.</p><p>You can re-enable emails anytime from your ClawFeed settings.</p></div></body></html>`;
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(html);
+        return;
+      }
+      return json(res, { ok: true, message: 'unsubscribed' });
     }
 
     // ── Telegram settings endpoints ──

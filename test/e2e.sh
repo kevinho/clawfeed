@@ -465,6 +465,81 @@ r=$(curl -s "$API/sources")
 check_not "16.7 Deleted source not in active sources" 'SoftDel Test' "$r"
 
 # ═══════════════════════════════════════════
+# 18. Email Preferences
+# ═══════════════════════════════════════════
+echo ""
+echo "─── 18. Email Preferences ───"
+
+# 18.1 Get default (no pref set yet → off)
+r=$(curl -s "$API/email/preferences" -H "$ALICE")
+check "18.1 Default email pref is off" '"frequency":"off"' "$r"
+
+# 18.2 Anon → 401
+r=$(curl -s "$API/email/preferences")
+check "18.2 Anon → 401" '"error"' "$r"
+
+# 18.3 Set to daily
+r=$(curl -s -X PUT "$API/email/preferences" -H "$ALICE" -H "Content-Type: application/json" -d '{"frequency":"daily"}')
+check "18.3 Set daily" '"frequency":"daily"' "$r"
+
+# 18.4 Verify daily persisted
+r=$(curl -s "$API/email/preferences" -H "$ALICE")
+check "18.4 Verify daily" '"frequency":"daily"' "$r"
+
+# 18.5 Set to weekly
+r=$(curl -s -X PUT "$API/email/preferences" -H "$ALICE" -H "Content-Type: application/json" -d '{"frequency":"weekly"}')
+check "18.5 Set weekly" '"frequency":"weekly"' "$r"
+
+# 18.6 Invalid frequency → 400
+r=$(curl -s -X PUT "$API/email/preferences" -H "$ALICE" -H "Content-Type: application/json" -d '{"frequency":"hourly"}')
+check "18.6 Invalid freq → 400" '"error"' "$r"
+
+# 18.7 Unsubscribe via token
+# Get the token from DB
+UNSUB_TOKEN=$(sqlite3 "$AI_DIGEST_DB" "SELECT unsubscribe_token FROM email_preferences WHERE user_id=(SELECT id FROM users WHERE name='Alice (Test)') LIMIT 1" 2>/dev/null)
+if [ -n "$UNSUB_TOKEN" ]; then
+  r=$(curl -s -X POST "$API/email/unsubscribe?token=$UNSUB_TOKEN")
+  check "18.7 Unsubscribe via token" '"ok":true' "$r"
+
+  # 18.8 Verify unsubscribed
+  r=$(curl -s "$API/email/preferences" -H "$ALICE")
+  check "18.8 Verify unsubscribed → off" '"frequency":"off"' "$r"
+else
+  SKIP=$((SKIP+2))
+  echo "  ⏭ 18.7-18.8 Skipped (no token in DB)"
+fi
+
+# 18.9 Unsubscribe with bad token → 404
+r=$(curl -s -X POST "$API/email/unsubscribe?token=badtoken123")
+check "18.9 Bad token → 404" '"error"' "$r"
+
+# 18.10 Bob sets independently
+r=$(curl -s -X PUT "$API/email/preferences" -H "$BOB" -H "Content-Type: application/json" -d '{"frequency":"daily"}')
+check "18.10 Bob sets daily" '"frequency":"daily"' "$r"
+
+# 18.11 GET unsubscribe shows confirmation (does NOT modify state)
+if [ -n "$UNSUB_TOKEN" ]; then
+  # Re-enable first
+  curl -s -X PUT "$API/email/preferences" -H "$ALICE" -H "Content-Type: application/json" -d '{"frequency":"daily"}' > /dev/null
+  r=$(curl -s "$API/email/unsubscribe?token=$UNSUB_TOKEN")
+  check "18.11 GET unsubscribe → confirmation page" 'Unsubscribe from ClawFeed' "$r"
+
+  # 18.12 GET does NOT actually unsubscribe (prefetcher safety)
+  r=$(curl -s "$API/email/preferences" -H "$ALICE")
+  check "18.12 GET did not change pref (still daily)" '"frequency":"daily"' "$r"
+
+  # 18.13 POST actually unsubscribes
+  r=$(curl -s -X POST "$API/email/unsubscribe?token=$UNSUB_TOKEN")
+  check "18.13 POST unsubscribe executes" '"ok":true' "$r"
+
+  r=$(curl -s "$API/email/preferences" -H "$ALICE")
+  check "18.14 POST confirmed → off" '"frequency":"off"' "$r"
+else
+  SKIP=$((SKIP+1))
+  echo "  ⏭ 18.11 Skipped (no token)"
+fi
+
+# ═══════════════════════════════════════════
 # RESULTS
 # ═══════════════════════════════════════════
 echo ""
