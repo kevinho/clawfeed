@@ -28,6 +28,7 @@ import {
   listRawItemsForDigest,
   createDigest,
   listSources,
+  getUsersWithTelegramForDigest,
 } from './db.mjs';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -212,6 +213,21 @@ async function generateForUser(db, userId, userName, type, dryRun) {
 
   const result = createDigest(db, { type, content, metadata, user_id: userId });
   console.log(`  [done] ${userName || userId}: digest #${result.id} created`);
+
+  // Dispatch push notification (fire-and-forget via CLI)
+  try {
+    const { fork: forkChild } = await import('child_process');
+    const telegramPath = join(__dirname, 'telegram.mjs');
+    if (existsSync(telegramPath)) {
+      const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN;
+      if (BOT_TOKEN) {
+        const child = forkChild(telegramPath, ['--push', String(result.id), type], { stdio: 'ignore' });
+        child.on('error', () => {});
+        child.unref();
+      }
+    }
+  } catch {}
+
   return result;
 }
 
