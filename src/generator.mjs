@@ -221,7 +221,7 @@ async function generateForUser(db, userId, userName, type, dryRun) {
     if (existsSync(telegramPath)) {
       const BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN || env.TELEGRAM_BOT_TOKEN;
       if (BOT_TOKEN) {
-        const child = forkChild(telegramPath, ['--push', String(result.id), type], { stdio: 'pipe' });
+        const child = forkChild(telegramPath, ['--push', String(result.id), type], { stdio: 'ignore' });
         child.on('error', () => {});
         child.unref();
       }

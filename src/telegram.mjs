@@ -192,6 +192,15 @@ async function handleSettings(db, msg) {
 
 // ── Format & send digest ──
 
+function sendPlainMessage(chatId, text) {
+  // Send without parse_mode — safe for LLM-generated content
+  return tgApi('sendMessage', {
+    chat_id: chatId,
+    text,
+    disable_web_page_preview: true,
+  });
+}
+
 async function sendDigestMessage(chatId, digest) {
   const content = digest.content || '';
   // Telegram message limit is 4096 chars
@@ -199,16 +208,16 @@ async function sendDigestMessage(chatId, digest) {
 
   const typeLabels = { '4h': '☀️ 简报', daily: '📰 日报', weekly: '📅 周报', monthly: '📊 月报' };
   const label = typeLabels[digest.type] || '📝 Digest';
-  const header = `*${label}* — ${digest.created_at?.split(' ')[0] || 'latest'}\n\n`;
+  const header = `${label} — ${digest.created_at?.split(' ')[0] || 'latest'}\n\n`;
 
   if (header.length + content.length <= maxLen) {
-    await sendMessage(chatId, header + content);
+    await sendPlainMessage(chatId, header + content);
   } else {
     // Split into chunks
     const chunkSize = maxLen - header.length;
-    await sendMessage(chatId, header + content.slice(0, chunkSize) + '\n\n_(continued...)_');
+    await sendPlainMessage(chatId, header + content.slice(0, chunkSize) + '\n\n(continued...)');
     for (let i = chunkSize; i < content.length; i += maxLen - 50) {
-      await sendMessage(chatId, content.slice(i, i + maxLen - 50));
+      await sendPlainMessage(chatId, content.slice(i, i + maxLen - 50));
     }
   }
 }
@@ -218,16 +227,22 @@ async function sendDigestMessage(chatId, digest) {
 export async function pushDigestToTelegram(db, digestId, digestType) {
   if (!BOT_TOKEN) return { sent: 0, skipped: 'no bot token' };
 
-  const users = getUsersWithTelegramForDigest(db, digestType);
-  if (!users.length) return { sent: 0, reason: 'no subscribers for this type' };
-
   const digest = getDigest(db, digestId);
   if (!digest) return { sent: 0, error: 'digest not found' };
 
+  const users = getUsersWithTelegramForDigest(db, digestType);
+  if (!users.length) return { sent: 0, reason: 'no subscribers for this type' };
+
   let sent = 0;
   let failed = 0;
+  let skipped = 0;
 
   for (const user of users) {
+    // Only send to the user who owns this digest (prevent cross-user leak)
+    if (digest.user_id && digest.user_id !== user.user_id) {
+      skipped++;
+      continue;
+    }
     try {
       await sendDigestMessage(user.chat_id, digest);
       logPush(db, user.user_id, 'telegram', digestId, 'sent');
@@ -239,8 +254,8 @@ export async function pushDigestToTelegram(db, digestId, digestType) {
     }
   }
 
-  console.log(`[telegram] Pushed digest #${digestId} (${digestType}): ${sent} sent, ${failed} failed`);
-  return { sent, failed };
+  console.log(`[telegram] Pushed digest #${digestId} (${digestType}): ${sent} sent, ${failed} failed, ${skipped} skipped (wrong user)`);
+  return { sent, failed, skipped };
 }
 
 // ── Long polling ──

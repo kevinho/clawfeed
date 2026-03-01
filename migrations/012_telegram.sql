@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS telegram_link_codes (
   code TEXT PRIMARY KEY,
   chat_id TEXT NOT NULL,
   chat_username TEXT,
+  attempts INTEGER NOT NULL DEFAULT 0,
   created_at TEXT NOT NULL DEFAULT (datetime('now'))
 );
 

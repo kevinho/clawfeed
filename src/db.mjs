@@ -643,7 +643,9 @@ export function setConfig(db, key, value) {
 
 export function saveTelegramLink(db, userId, chatId, username) {
   return db.prepare(
-    'INSERT OR REPLACE INTO telegram_links (user_id, chat_id, enabled, digest_types) VALUES (?, ?, 1, ?)'
+    `INSERT INTO telegram_links (user_id, chat_id, enabled, digest_types)
+     VALUES (?, ?, 1, ?)
+     ON CONFLICT(user_id) DO UPDATE SET chat_id = excluded.chat_id`
   ).run(userId, chatId, JSON.stringify(['4h', 'daily']));
 }
 
@@ -701,8 +703,15 @@ export function consumeLinkCode(db, code) {
   const row = db.prepare(
     "SELECT * FROM telegram_link_codes WHERE code = ? AND created_at >= datetime('now', '-10 minutes')"
   ).get(code);
-  if (row) db.prepare('DELETE FROM telegram_link_codes WHERE code = ?').run(code);
-  return row;
+  if (row) {
+    db.prepare('DELETE FROM telegram_link_codes WHERE code = ?').run(code);
+    return row;
+  }
+  // Wrong code — increment attempts on all active codes to mitigate brute-force
+  // If any code exceeds 5 attempts, invalidate it
+  db.prepare("UPDATE telegram_link_codes SET attempts = attempts + 1 WHERE created_at >= datetime('now', '-10 minutes')").run();
+  db.prepare("DELETE FROM telegram_link_codes WHERE attempts >= 5").run();
+  return null;
 }
 
 export function logPush(db, userId, channel, digestId, status, error) {
