@@ -1,7 +1,7 @@
 {
   "name": "clawfeed",
   "version": "0.8.1",
-  "description": "AI-powered news digest tool \u2014 generates structured summaries from Twitter/RSS feeds",
+  "description": "AI-powered news digest tool — generates structured summaries from Twitter/RSS feeds",
   "type": "module",
   "scripts": {
     "start": "node src/server.mjs",
@@ -21,6 +21,6 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "better-sqlite3": "^11.0.0"
+    "better-sqlite3": "^13.0.3"
   }
 }
